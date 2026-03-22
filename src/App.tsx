@@ -206,7 +206,7 @@ export default function App() {
         <main className="tab-content">
           {shoppingProducts.length === 0 ? (
             <div className="empty-state">
-              <span className="icon">��</span>
+              <span className="icon">🛒</span>
               Список покупок пуст.
               <br />
               Перейдите в «Продукты» и добавьте нужные.
