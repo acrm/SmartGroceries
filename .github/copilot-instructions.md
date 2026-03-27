@@ -6,10 +6,14 @@
 - After any tracked file change, run version bump:
   - `npm run bump:build -- --desc "Short English summary"`
   - `npm run bump:minor -- --desc "Short English summary"`
+- Bump script performs commit automatically with message `<version>: <description>`.
+- Default bump commit includes all repository changes.
+- For staged-only commit use:
+  - `npm run bump:build:staged -- --desc "Short English summary"`
+  - `npm run bump:minor:staged -- --desc "Short English summary"`
 - Keep version synchronized in `version.json` and `package.json`.
 - Ensure `build-notes.md` gets appended on each bump.
-- Use commit message format: `<version>: <description>`.
-- Standard sequence: change files -> bump version -> verify -> commit.
+- Standard sequence: change files -> (optional stage subset) -> bump version (auto-commit) -> verify.
 - After any source change, review and update domain docs if impacted.
 
 ## Key Documentation
@@ -26,3 +30,5 @@
 - Dev: `npm run dev`
 - Bump build: `npm run bump:build -- --desc "Short English summary"`
 - Bump minor: `npm run bump:minor -- --desc "Short English summary"`
+- Bump build (staged-only): `npm run bump:build:staged -- --desc "Short English summary"`
+- Bump minor (staged-only): `npm run bump:minor:staged -- --desc "Short English summary"`

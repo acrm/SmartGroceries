@@ -14,10 +14,19 @@ Version format: `<weekCode>-<minor>.<build>`
 ### Mandatory Version Bump After Any Tracked File Change
 
 After modifying any tracked file:
-1. Run: `npm run bump:build -- --desc "Short English summary"`
-2. Verify version in `version.json` and `package.json`
-3. Run: `npm run typecheck` or `npm run build` to validate
-4. Commit with format: `<version>: <description>`
+1. Run one bump command with description:
+	 - `npm run bump:build -- --desc "Short English summary"`
+	 - or `npm run bump:minor -- --desc "Short English summary"`
+2. The bump script updates `version.json`, `package.json`, `build-notes.md` and creates commit automatically.
+3. Verify project health (`npm run typecheck`, `npm run lint`, `npm run build`).
+
+Default commit behavior:
+- Commit all repository changes after bump (`git add -A`).
+
+Staged-only commit behavior:
+- Use `npm run bump:build:staged -- --desc "Short English summary"` or
+	`npm run bump:minor:staged -- --desc "Short English summary"`.
+- Script commits only files that were already staged at call time, plus mandatory version files.
 
 ### Commands Reference
 
@@ -28,6 +37,8 @@ After modifying any tracked file:
 - `npm run test` — run tests (if configured)
 - `npm run bump:build -- --desc "..."` — bump build version
 - `npm run bump:minor -- --desc "..."` — bump minor version
+- `npm run bump:build:staged -- --desc "..."` — staged-only build bump with auto-commit
+- `npm run bump:minor:staged -- --desc "..."` — staged-only minor bump with auto-commit
 
 ## Project Documentation Synchronization
 
@@ -41,9 +52,9 @@ Keep docs in English, concise, and factual.
 ## Git Workflow
 
 1. Make code changes
-2. Bump version: `npm run bump:build -- --desc "..."`
-3. Verify: `npm run typecheck && npm run build`
-4. Commit: `<version>: <description>`
+2. Optionally stage only the files you want in commit
+3. Run bump script with `--desc` (script auto-commits)
+4. Verify: `npm run typecheck && npm run lint && npm run build`
 5. Push to GitHub
 
 ## File Locations to Know

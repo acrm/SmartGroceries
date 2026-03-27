@@ -74,7 +74,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "bump:build": "node scripts/update-version.js",
-    "bump:minor": "node scripts/update-version.js --minor"
+    "bump:minor": "node scripts/update-version.js --minor",
+    "bump:build:staged": "node scripts/update-version.js --commit-staged-only",
+    "bump:minor:staged": "node scripts/update-version.js --minor --commit-staged-only"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -147,6 +149,8 @@ const versionData = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
 // Парсить аргументы
 const args = process.argv.slice(2);
 const isMinor = args.includes('--minor');
+const isNoCommit = args.includes('--no-commit');
+const isCommitStagedOnly = args.includes('--commit-staged-only');
 const descIdx = args.indexOf('--desc');
 const description = descIdx !== -1 ? args[descIdx + 1] : 'Updates';
 
@@ -194,7 +198,21 @@ if (!buildNotes.includes('# Build Notes')) {
 }
 fs.writeFileSync(buildNotesFile, buildNotes + noteEntry);
 
-console.log(`✓ Version bumped to ${newVersion}`);
+// Auto-commit behavior
+// Default: commit all repo changes
+// Staged-only mode: commit only files staged before script call (+ version files)
+const commitMessage = `${newVersion}: ${description}`;
+
+if (!isNoCommit) {
+  if (isCommitStagedOnly) {
+    // Implementation detail: preserve staged-only intent using pre-captured staged paths.
+    // Then stage only those paths plus version files and commit.
+  } else {
+    // git add -A && git commit -m "<version>: <description>"
+  }
+}
+
+console.log(newVersion);
 ```
 
 ### 2.2.1 Убедиться в наличии `build-notes.md`
@@ -229,11 +247,16 @@ Version format: `<weekCode>-<minor>.<build>`
 
 ### Mandatory Version Bump After Any Tracked File Change
 
-After modifying ANY tracked file (except docs, README updates):
-1. Run: `npm run bump:build -- --desc "Short English summary"`
-2. Verify version in `version.json` and `package.json`
-3. Run: `npm run typecheck` or `npm run build` to validate
-4. Commit with format: `<version>: <description>`
+After modifying tracked files:
+1. Run bump with description:
+  - `npm run bump:build -- --desc "Short English summary"`
+  - or `npm run bump:minor -- --desc "Short English summary"`
+2. Bump script auto-updates version files and creates commit `<version>: <description>`.
+3. Validate with `npm run typecheck`, `npm run lint`, `npm run build`.
+
+For staged-only commit mode:
+- `npm run bump:build:staged -- --desc "Short English summary"`
+- `npm run bump:minor:staged -- --desc "Short English summary"`
 
 ### Commands Reference
 
@@ -244,6 +267,8 @@ After modifying ANY tracked file (except docs, README updates):
 - `npm run test` — run tests (if configured)
 - `npm run bump:build -- --desc "..."` — bump build version
 - `npm run bump:minor -- --desc "..."` — bump minor version
+- `npm run bump:build:staged -- --desc "..."` — staged-only build bump and auto-commit
+- `npm run bump:minor:staged -- --desc "..."` — staged-only minor bump and auto-commit
 
 ## Project Documentation Synchronization
 
@@ -257,9 +282,9 @@ Keep docs in English, concise, and factual.
 ## Git Workflow
 
 1. Make code changes
-2. Bump version: `npm run bump:build -- --desc "..."`
-3. Verify: `npm run typecheck && npm run build`
-4. Commit: `<version>: <description>`
+2. (Optional) Stage only files you want in commit
+3. Run bump command with `--desc` (script creates commit automatically)
+4. Verify: `npm run typecheck && npm run lint && npm run build`
 5. Push to GitHub
 
 ## File Locations to Know
@@ -284,10 +309,14 @@ Keep docs in English, concise, and factual.
 - After any tracked file change, run version bump:
   - `npm run bump:build -- --desc "Short English summary"`
   - `npm run bump:minor -- --desc "Short English summary"`
+- Bump script performs commit automatically with message `<version>: <description>`.
+- Default bump commit includes all repository changes.
+- For staged-only commit use:
+  - `npm run bump:build:staged -- --desc "Short English summary"`
+  - `npm run bump:minor:staged -- --desc "Short English summary"`
 - Keep version synchronized in `version.json` and `package.json`.
 - Ensure `build-notes.md` gets appended on each bump.
-- Use commit message format: `<version>: <description>`.
-- Standard sequence: change files -> bump version -> verify -> commit.
+- Standard sequence: change files -> (optional stage subset) -> bump version (auto-commit) -> verify.
 - After any source change, review and update domain docs if impacted.
 
 ## Key Documentation
@@ -304,6 +333,8 @@ Keep docs in English, concise, and factual.
 - Dev: `npm run dev`
 - Bump build: `npm run bump:build -- --desc "Short English summary"`
 - Bump minor: `npm run bump:minor -- --desc "Short English summary"`
+- Bump build (staged-only): `npm run bump:build:staged -- --desc "Short English summary"`
+- Bump minor (staged-only): `npm run bump:minor:staged -- --desc "Short English summary"`
 ```
 
 ---
@@ -701,6 +732,7 @@ Version bumps after every code change:
 ```bash
 npm run bump:build -- --desc "Your change description"
 npm run bump:minor -- --desc "For breaking changes"
+npm run bump:build:staged -- --desc "For staged-only commit"
 ```
 
 ## License
@@ -710,9 +742,9 @@ MIT License - feel free to use and modify!
 ## Contributing
 
 1. Make your changes
-2. Bump version: `npm run bump:build -- --desc "..."`
-3. Validate: `npm run typecheck && npm run build`
-4. Commit: `<version>: <description>`
+2. (Optional) Stage only target files
+3. Bump version (script auto-commits): `npm run bump:build -- --desc "..."`
+4. Validate: `npm run typecheck && npm run lint && npm run build`
 5. Push and create PR
 
 See [AI_AGENT_INSTRUCTIONS.md](./AI_AGENT_INSTRUCTIONS.md) for AI agent workflow guidelines.
@@ -733,7 +765,7 @@ Perform all steps below end-to-end. Do not stop at analysis.
 3. Keep changes minimal and targeted; do not add unrelated features.
 4. If a required file already exists, update it to match the contract below.
 5. If equivalent logic exists under different names/paths, either align it or replace with the contract structure.
-6. After all edits and version bump are done, create a git commit immediately in the same task.
+6. After all edits and version bump are done, ensure auto-commit was created by the bump script in the same task.
 
 ---
 
@@ -749,13 +781,15 @@ Create or update with these policy blocks:
 - Commands:
   - `npm run bump:build -- --desc "Short English summary"`
   - `npm run bump:minor -- --desc "Short English summary"`
+  - `npm run bump:build:staged -- --desc "Short English summary"`
+  - `npm run bump:minor:staged -- --desc "Short English summary"`
 - Explain that version metadata is synchronized in `version.json` and `package.json`, and notes appended to `build-notes.md`.
-- Commit message format requirement: `<version>: <description>`.
+- Commit message format requirement: `<version>: <description>` (created by bump script).
 - Standard git workflow sequence:
   1) apply changes,
-  2) run bump,
-  3) run verification,
-  4) commit.
+  2) optionally stage subset,
+  3) run bump (auto-commit),
+  4) run verification.
 
 ### 2) `.github/copilot-instructions.md`
 
@@ -883,8 +917,7 @@ npm run bump:build -- --desc "Initialize interactive ball game with AI agent wor
 ### 6.3 Git коммит
 
 ```bash
-git add -A
-git commit -m "<newVersion>: Initialize interactive ball game with AI agent workflow"
+# Commit is created automatically by bump script
 git push origin main
 ```
 
@@ -1010,7 +1043,7 @@ https://<username>.github.io/<repo-name>/
 - ✓ `npm run lint` — успешно (или с предупреждениями)
 - ✓ `npm run build` — успешно, бинарник создан в `dist/`
 - ✓ Версия bumped до `<resultVersion>`
-- ✓ Git коммит создан: `<resultVersion>: Initialize...`
+- ✓ Git коммит создан скриптом: `<resultVersion>: <description>`
 
 ### Итоговая версия
 `<resultVersion>` (из `version.json`)

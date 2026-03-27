@@ -23,11 +23,21 @@ function getIsoWeekCode(date = new Date()) {
 function parseArgs(argv) {
   let minor = false
   let desc = ''
+  let noCommit = false
+  let commitStagedOnly = false
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--minor') {
       minor = true
+      continue
+    }
+    if (arg === '--no-commit') {
+      noCommit = true
+      continue
+    }
+    if (arg === '--commit-staged-only') {
+      commitStagedOnly = true
       continue
     }
     if (arg === '--desc') {
@@ -36,7 +46,58 @@ function parseArgs(argv) {
     }
   }
 
-  return { minor, desc: desc.trim() }
+  return {
+    minor,
+    noCommit,
+    commitStagedOnly,
+    desc: desc.trim(),
+  }
+}
+
+function runGit(args, options = {}) {
+  return execSync(`git ${args.join(' ')}`, {
+    cwd: rootDir,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    ...options,
+  }).trim()
+}
+
+function getStagedPaths() {
+  const output = runGit(['diff', '--name-only', '--cached'])
+  if (!output) return []
+  return output.split('\n').map((line) => line.trim()).filter(Boolean)
+}
+
+function quotePathspec(filePath) {
+  return `"${filePath.replace(/\\/g, '/').replace(/"/g, '\\"')}"`
+}
+
+function commitVersionBump({
+  noCommit,
+  commitStagedOnly,
+  commitMessage,
+  preStagedPaths,
+}) {
+  if (noCommit) return
+
+  if (commitStagedOnly) {
+    if (preStagedPaths.length === 0) {
+      throw new Error(
+        'No staged files found for --commit-staged-only. Stage files first or remove the option.'
+      )
+    }
+
+    runGit(['reset', '-q'])
+
+    const mandatoryPaths = ['version.json', 'package.json', 'build-notes.md']
+    const targetPaths = [...new Set([...preStagedPaths, ...mandatoryPaths])]
+    runGit(['add', '-A', '--', ...targetPaths.map(quotePathspec)], { shell: true })
+  } else {
+    runGit(['add', '-A'])
+  }
+
+  runGit(['commit', '-m', `"${commitMessage.replace(/"/g, '\\"')}"`], { shell: true })
 }
 
 function getFallbackDescription() {
@@ -66,8 +127,14 @@ function ensureBuildNotesExists() {
 }
 
 function main() {
-  const { minor, desc } = parseArgs(process.argv.slice(2))
+  const {
+    minor,
+    noCommit,
+    commitStagedOnly,
+    desc,
+  } = parseArgs(process.argv.slice(2))
   const currentWeekCode = getIsoWeekCode(new Date())
+  const preStagedPaths = commitStagedOnly ? getStagedPaths() : []
 
   const versionData = readJson(versionPath)
   const packageData = readJson(packagePath)
@@ -106,6 +173,14 @@ function main() {
 
   ensureBuildNotesExists()
   fs.appendFileSync(notesPath, `- ${newVersion} — ${finalDescription}\n`, 'utf8')
+
+  const commitMessage = `${newVersion}: ${finalDescription}`
+  commitVersionBump({
+    noCommit,
+    commitStagedOnly,
+    commitMessage,
+    preStagedPaths,
+  })
 
   process.stdout.write(`${newVersion}\n`)
 }

@@ -1,7 +1,7 @@
 {
   "name": "smartgroceries",
   "private": true,
-  "version": "2026w13-0.1",
+  "version": "2026w13-1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "bump:build": "node scripts/update-version.js",
-    "bump:minor": "node scripts/update-version.js --minor"
+    "bump:minor": "node scripts/update-version.js --minor",
+    "bump:build:staged": "node scripts/update-version.js --commit-staged-only",
+    "bump:minor:staged": "node scripts/update-version.js --minor --commit-staged-only"
   },
   "dependencies": {
     "react": "^19.2.4",

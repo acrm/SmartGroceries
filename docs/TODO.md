@@ -1,24 +1,36 @@
 # Project Roadmap
 
-## Current Features
-- [x] Product catalog management
-- [x] Shopping list toggling
-- [x] Bought-state tracking
-- [x] Local persistence via browser storage
-- [x] Mobile-first layout and tab flow
+## Current Foundation
 
-## TODO
-- [ ] Add optional product categories
-- [ ] Add reorder and sort controls
-- [ ] Add duplicate-name validation
-- [ ] Add search/filter for large lists
-- [ ] Add import/export of saved data
-- [ ] Add basic unit tests for state transitions
+- [x] Frontend-only React + TypeScript setup
+- [x] Local state persistence baseline
+- [x] GitHub Pages deployment workflow
+- [x] Versioned workflow with build notes
+- [x] Product specification and architecture docs
 
-## Known Issues
-- No automated tests are currently configured.
-- Product IDs are random and not deterministic for test fixtures.
+## MVP Delivery Plan
 
-## Technical Debt
-- Extract storage and list mutations into reusable modules.
-- Introduce shared UI components for buttons and list rows.
+- [ ] Create normalized domain store (`products`, `sessions`, `items`, `history`)
+- [ ] Implement Product Catalog CRUD with stock status and priority
+- [ ] Add Shopping Preparation screen with budget + rounding setup
+- [ ] Implement budget-based item prioritization
+- [ ] Build In-Store mode with live spent/remaining budget
+- [ ] Implement rounded price input (`10/50/100`)
+- [ ] Add Checkout flow and purchase history persistence
+- [ ] Build History screen (sessions + product price changes)
+
+## Quality and Workshop Readiness
+
+- [ ] Add reducer-level tests for budget and lifecycle transitions
+- [ ] Add data migration guard for future schema updates
+- [ ] Add empty/error states for corrupted local data
+- [ ] Add keyboard accessibility and mobile interaction polish
+- [ ] Add workshop demo script and checkpoints per stage
+
+## Future Extensions
+
+- [ ] Consumption-rate estimation based on purchase cadence
+- [ ] Category-level budget caps
+- [ ] CSV export/import
+- [ ] Enhanced price trend visualization
+- [ ] Optional PWA offline UX improvements
