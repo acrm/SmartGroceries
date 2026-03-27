@@ -1025,7 +1025,8 @@ export default function App() {
             </div>
           ) : activeSession.status === 'draft' ? (
             <div className="empty-state">
-              Сессия в статусе черновика.
+              <span className="icon">🛒</span>
+              Список покупок пуст.
               <br />
               Нажмите «Начать покупки» на вкладке «Подготовка».
             </div>
