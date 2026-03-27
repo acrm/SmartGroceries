@@ -5,3 +5,4 @@
 - 2026w13-0.2 — Document Smart Grocery Planner product specification
 - 2026w13-1.1 — Publish architecture and implementation plan docs
 - 2026w13-1.2 — Enable auto-commit bump workflow with staged-only mode
+- 2026w13-1.3 — Implement Russian budget-zone shopping workflow foundation
