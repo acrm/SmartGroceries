@@ -6,3 +6,4 @@
 - 2026w13-1.1 — Publish architecture and implementation plan docs
 - 2026w13-1.2 — Enable auto-commit bump workflow with staged-only mode
 - 2026w13-1.3 — Implement Russian budget-zone shopping workflow foundation
+- 2026w13-1.4 — Redesign UI for better UX with lucide-react icons

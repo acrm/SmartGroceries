@@ -1,4 +1,6 @@
-import {
+const fs = require('fs');
+
+const appTsxContent = `import {
   useState,
   useEffect,
   useMemo,
@@ -703,7 +705,7 @@ export default function App() {
                         onChange={(e) => updateProduct(product.id, { name: e.target.value })}
                       />
                       <div className="item-subtitle" style={{marginTop: '4px'}}>
-                        <span className={`badge badge-${product.stockStatus}`}>
+                        <span className={\`badge badge-\${product.stockStatus}\`}>
                           {getStockStatusLabel(product.stockStatus)}
                         </span>
                       </div>
@@ -814,7 +816,7 @@ export default function App() {
                           <div className="item-title">{product.name}</div>
                           <div className="item-subtitle">{formatCurrencyRsd(product.latestUnitPrice)}</div>
                         </div>
-                        <button className={`btn ${included ? 'btn-outline' : 'btn-primary'}`} onClick={() => toggleIncludeInSession(product.id)} style={{padding: '8px 12px'}}>
+                        <button className={\`btn \${included ? 'btn-outline' : 'btn-primary'}\`} onClick={() => toggleIncludeInSession(product.id)} style={{padding: '8px 12px'}}>
                           {included ? 'Убрать' : 'Добавить'}
                         </button>
                       </div>
@@ -832,7 +834,7 @@ export default function App() {
                     const product = productMap.get(item.productId)
                     if (!product) return null
                     return (
-                      <div key={item.id} className={`list-item ${item.inZone ? 'zone-in' : 'zone-out'}`}>
+                      <div key={item.id} className={\`list-item \${item.inZone ? 'zone-in' : 'zone-out'}\`}>
                         <div className="item-header">
                           <div className="item-title-col">
                             <div className="item-title">{product.name}</div>
@@ -901,8 +903,8 @@ export default function App() {
                   const actualTotal = rounded * item.plannedQty
                   return (
                     <div key={item.id} className="list-item" style={{padding: '12px', background: item.picked ? 'var(--color-primary-light)' : 'var(--color-white)'}}>
-                      <div className={`store-item ${item.picked ? 'checked' : ''}`}>
-                        <div className={`check-circle ${item.picked ? 'checked' : ''}`} onClick={() => togglePicked(item.id)}>
+                      <div className={\`store-item \${item.picked ? 'checked' : ''}\`}>
+                        <div className={\`check-circle \${item.picked ? 'checked' : ''}\`} onClick={() => togglePicked(item.id)}>
                           <Check size={20} />
                         </div>
                         <div className="item-title-col">
@@ -983,19 +985,19 @@ export default function App() {
       )}
 
       <nav className="bottom-nav">
-        <button className={`nav-btn ${tab === 'catalog' ? 'active' : ''}`} onClick={() => setTab('catalog')}>
+        <button className={\`nav-btn \${tab === 'catalog' ? 'active' : ''}\`} onClick={() => setTab('catalog')}>
           <PackageOpen size={24} />
           <span>Ассортимент</span>
         </button>
-        <button className={`nav-btn ${tab === 'preparation' ? 'active' : ''}`} onClick={() => setTab('preparation')}>
+        <button className={\`nav-btn \${tab === 'preparation' ? 'active' : ''}\`} onClick={() => setTab('preparation')}>
           <ClipboardList size={24} />
           <span>Подготовка</span>
         </button>
-        <button className={`nav-btn ${tab === 'store' ? 'active' : ''}`} onClick={() => setTab('store')}>
+        <button className={\`nav-btn \${tab === 'store' ? 'active' : ''}\`} onClick={() => setTab('store')}>
           <ShoppingCart size={24} />
           <span>В магазине</span>
         </button>
-        <button className={`nav-btn ${tab === 'history' ? 'active' : ''}`} onClick={() => setTab('history')}>
+        <button className={\`nav-btn \${tab === 'history' ? 'active' : ''}\`} onClick={() => setTab('history')}>
           <History size={24} />
           <span>История</span>
         </button>
@@ -1003,3 +1005,6 @@ export default function App() {
     </div>
   )
 }
+`
+
+fs.writeFileSync('src/App.tsx', appTsxContent);
