@@ -9,7 +9,7 @@ import {
 import {
   DndContext,
   PointerSensor,
-  closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
   useDroppable,
@@ -480,6 +480,8 @@ export default function App() {
   const [preparedSelectedIds, setPreparedSelectedIds] = useState<Set<ID>>(() => new Set())
   const [storeSelectedIds, setStoreSelectedIds] = useState<Set<ID>>(() => new Set())
 
+  const [confirmingComplete, setConfirmingComplete] = useState(false)
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -893,8 +895,15 @@ export default function App() {
   const completePurchases = () => {
     if (preparedItems.length === 0) return
 
-    const shouldComplete = window.confirm('Завершить покупки и перенести в историю?')
-    if (!shouldComplete) return
+    if (!confirmingComplete) {
+      setConfirmingComplete(true)
+      setTimeout(() => {
+        setConfirmingComplete(false)
+      }, 5000)
+      return
+    }
+
+    setConfirmingComplete(false)
 
     setState((prev) => {
       const completedAt = nowIso()
@@ -1064,7 +1073,7 @@ export default function App() {
             ) : (
               <DndContext
                 sensors={sensors}
-                collisionDetection={closestCenter}
+                collisionDetection={pointerWithin}
                 onDragEnd={onCatalogDragEnd}
               >
                 <SortableContext
@@ -1190,7 +1199,7 @@ export default function App() {
 
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={pointerWithin}
             onDragEnd={onPreparationDragEnd}
           >
             <div style={{ marginBottom: '16px' }}>
@@ -1374,7 +1383,7 @@ export default function App() {
 
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={pointerWithin}
             onDragEnd={onStoreDragEnd}
           >
             <div style={{ marginBottom: '16px' }}>
@@ -1522,11 +1531,11 @@ export default function App() {
           
           <div className="panel-footer" style={{ marginTop: '16px' }}>
             <button
-              className="btn btn-primary"
+              className={`btn ${confirmingComplete ? 'btn-danger' : 'btn-primary'}`}
               onClick={completePurchases}
               disabled={preparedItems.length === 0}
             >
-              Завершить покупки
+              {confirmingComplete ? 'Уверены?' : 'Завершить покупки'}
             </button>
           </div>
         </main>
