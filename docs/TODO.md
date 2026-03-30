@@ -10,21 +10,22 @@
 
 ## MVP Delivery Plan
 
-- [ ] Create normalized domain store (`products`, `sessions`, `items`, `history`)
-- [ ] Implement Product Catalog CRUD with stock status and priority
-- [ ] Add Shopping Preparation screen with budget + rounding setup
-- [ ] Implement budget-based item prioritization
-- [ ] Build In-Store mode with live spent/remaining budget
-- [ ] Implement rounded price input (`10/50/100`)
-- [ ] Add Checkout flow and purchase history persistence
-- [ ] Build History screen (sessions + product price changes)
+- [x] Create normalized domain store (`products`, `preparedItems`, `history`, `settings`)
+- [x] Implement Product Catalog CRUD with nominal quantity and units
+- [x] Add Shopping Preparation screen with shared editable budget
+- [x] Implement budget-zone prioritization by list order
+- [x] Build In-Store mode with live spent/remaining budget
+- [x] Add checkout flow and purchase history persistence
+- [x] Build History screen with restore back to preparation
+- [x] Add drag-and-drop reorder by handle icon
+- [x] Add delete confirmation + bulk delete + 5-second undo
 
 ## Quality and Workshop Readiness
 
-- [ ] Add reducer-level tests for budget and lifecycle transitions
-- [ ] Add data migration guard for future schema updates
-- [ ] Add empty/error states for corrupted local data
-- [ ] Add keyboard accessibility and mobile interaction polish
+- [ ] Add reducer-level tests for budget-zone and undo transitions
+- [ ] Add stronger migration guard and versioned schema metadata
+- [ ] Add explicit error boundary for corrupted local payloads
+- [ ] Improve keyboard-only reorder accessibility for DnD handles
 - [ ] Add workshop demo script and checkpoints per stage
 
 ## Future Extensions

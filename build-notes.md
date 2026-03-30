@@ -8,3 +8,4 @@
 - 2026w13-1.3 — Implement Russian budget-zone shopping workflow foundation
 - 2026w13-1.4 — Redesign UI for better UX with lucide-react icons
 - 2026w13-1.5 — Clean up temp script
+- 2026w14-0.1 — Implement drag delete undo and budget-zone shopping UX

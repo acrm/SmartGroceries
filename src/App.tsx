@@ -1,97 +1,127 @@
 import {
-  useState,
   useEffect,
   useMemo,
-  type KeyboardEvent,
+  useState,
   type ChangeEvent,
+  type KeyboardEvent,
+  type ReactNode,
 } from 'react'
-import { 
-  PackageOpen, 
-  ClipboardList, 
-  ShoppingCart, 
-  History, 
-  Plus, 
-  Trash2, 
-  ArrowUp, 
-  ArrowDown, 
-  Check, 
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   AlertCircle,
+  Check,
+  ClipboardList,
+  GripVertical,
+  History,
+  PackageOpen,
+  Plus,
+  RotateCcw,
   ShoppingBag,
-  X
+  ShoppingCart,
+  Trash2,
+  X,
 } from 'lucide-react'
 import './App.css'
 
 type ID = string
 
-type StockStatus = 'in_stock' | 'low' | 'out'
-type SessionStatus = 'draft' | 'in_progress' | 'completed'
-type PriceRoundingStep = 10 | 50 | 100
+type Tab = 'catalog' | 'preparation' | 'store' | 'history'
+type Unit = 'pieces' | 'liters' | 'grams'
 
 interface Product {
   id: ID
   name: string
-  unit: string
-  stockStatus: StockStatus
+  unit: Unit
+  targetQty: number
   orderIndex: number
-  latestUnitPrice: number
+  latestUnitPrice: number | null
   createdAt: string
   updatedAt: string
 }
 
-interface ShoppingItem {
+interface PreparedItem {
   id: ID
   productId: ID
-  plannedQty: number
-  plannedOrder: number
-  estimatedUnitPrice: number
+  qty: number
+  orderIndex: number
+  estimatedUnitPrice: number | null
+  actualUnitPrice: number | null
   picked: boolean
-  actualUnitPrice: number
-  removed: boolean
 }
 
-interface ShoppingSession {
+interface HistoryItem {
   id: ID
-  status: SessionStatus
-  budgetTotal: number
-  roundingStep: PriceRoundingStep
-  items: ShoppingItem[]
-  createdAt: string
-  updatedAt: string
-  completedAt?: string
-}
-
-interface PurchaseHistoryEntry {
-  id: ID
-  sessionId: ID
   productId: ID
   productName: string
+  unit: Unit
   qty: number
-  roundedUnitPrice: number
+  estimatedUnitPrice: number | null
+  actualUnitPrice: number | null
   total: number
-  purchasedAt: string
+}
+
+interface HistorySession {
+  id: ID
+  completedAt: string
+  budget: number
+  items: HistoryItem[]
+}
+
+interface AppSettings {
+  defaultBudget: number
 }
 
 interface AppState {
   products: Product[]
-  sessions: ShoppingSession[]
-  history: PurchaseHistoryEntry[]
-  activeSessionId?: ID
+  preparedItems: PreparedItem[]
+  history: HistorySession[]
+  settings: AppSettings
 }
 
-type Tab = 'catalog' | 'preparation' | 'store' | 'history'
+interface UndoAction {
+  id: ID
+  message: string
+  expiresAt: number
+  previousState: AppState
+}
 
-const STORAGE_STATE_V2 = 'sg_state_v2'
-const LEGACY_STORAGE_PRODUCTS = 'sg_products'
-const LEGACY_STORAGE_SHOPPING = 'sg_shopping'
+interface ShortageDialogState {
+  product: Product
+  qtyDraft: string
+}
+
+interface ZoneItem extends PreparedItem {
+  estimatedTotal: number | null
+  inZone: boolean
+}
+
+const STORAGE_KEY = 'sg_state_v3'
+const DEFAULT_BUDGET = 5000
 
 const defaultState: AppState = {
   products: [],
-  sessions: [],
+  preparedItems: [],
   history: [],
-  activeSessionId: undefined,
+  settings: {
+    defaultBudget: DEFAULT_BUDGET,
+  },
 }
 
-function generateId(): string {
+function generateId(): ID {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
@@ -99,18 +129,8 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
-function toNumber(value: string, fallback = 0): number {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : fallback
-}
-
-function clampNonNegative(value: number): number {
-  return Number.isFinite(value) && value > 0 ? value : 0
-}
-
-function roundUpToStep(value: number, step: PriceRoundingStep): number {
-  if (value <= 0) return 0
-  return Math.ceil(value / step) * step
+function deepCloneState(state: AppState): AppState {
+  return JSON.parse(JSON.stringify(state)) as AppState
 }
 
 function safeLoad<T>(key: string, fallback: T): T {
@@ -122,91 +142,28 @@ function safeLoad<T>(key: string, fallback: T): T {
   }
 }
 
-function normalizeOrder(items: ShoppingItem[]): ShoppingItem[] {
-  return items
-    .slice()
-    .sort((a, b) => a.plannedOrder - b.plannedOrder)
-    .map((item, index) => ({ ...item, plannedOrder: index }))
+function toNumber(value: string, fallback = 0): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
 }
 
-function migrateLegacyState(): AppState {
-  const legacyProducts = safeLoad<Array<{ id: string; name: string }>>(
-    LEGACY_STORAGE_PRODUCTS,
-    []
-  )
-  const legacyShopping = safeLoad<Array<{ productId: string }>>(
-    LEGACY_STORAGE_SHOPPING,
-    []
-  )
-
-  if (legacyProducts.length === 0 && legacyShopping.length === 0) {
-    return defaultState
+function parsePositiveInt(value: string, fallback = 1): number {
+  const parsed = Math.floor(Number(value))
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback
   }
-
-  const migratedProducts: Product[] = legacyProducts.map((p, index) => ({
-    id: p.id,
-    name: p.name,
-    unit: 'шт',
-    stockStatus: 'out',
-    orderIndex: index,
-    latestUnitPrice: 0,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  }))
-
-  const validLegacyItems = legacyShopping.filter((item) =>
-    migratedProducts.some((p) => p.id === item.productId)
-  )
-
-  if (validLegacyItems.length === 0) {
-    return {
-      products: migratedProducts,
-      sessions: [],
-      history: [],
-      activeSessionId: undefined,
-    }
-  }
-
-  const sessionId = generateId()
-  const draftSession: ShoppingSession = {
-    id: sessionId,
-    status: 'draft',
-    budgetTotal: 0,
-    roundingStep: 10,
-    items: validLegacyItems.map((item, index) => ({
-      id: generateId(),
-      productId: item.productId,
-      plannedQty: 1,
-      plannedOrder: index,
-      estimatedUnitPrice: 0,
-      picked: false,
-      actualUnitPrice: 0,
-      removed: false,
-    })),
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  }
-
-  return {
-    products: migratedProducts,
-    sessions: [draftSession],
-    history: [],
-    activeSessionId: sessionId,
-  }
+  return parsed
 }
 
-function loadState(): AppState {
-  const stored = safeLoad<AppState | null>(STORAGE_STATE_V2, null)
-  if (stored && Array.isArray(stored.products) && Array.isArray(stored.sessions)) {
-    return {
-      products: stored.products,
-      sessions: stored.sessions,
-      history: stored.history ?? [],
-      activeSessionId: stored.activeSessionId,
-    }
+function parsePriceInput(value: string): number | null {
+  if (value.trim() === '') {
+    return null
   }
-
-  return migrateLegacyState()
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null
+  }
+  return parsed
 }
 
 function formatCurrencyRsd(value: number): string {
@@ -217,100 +174,452 @@ function formatCurrencyRsd(value: number): string {
   }).format(value)
 }
 
-function getStockStatusLabel(status: StockStatus): string {
-  if (status === 'in_stock') return 'В наличии'
-  if (status === 'low') return 'Мало'
-  return 'Нужно купить'
+function formatPrice(value: number | null): string {
+  if (value === null) {
+    return '?'
+  }
+  return formatCurrencyRsd(value)
+}
+
+function unitLabel(unit: Unit): string {
+  if (unit === 'liters') return 'л'
+  if (unit === 'grams') return 'г'
+  return 'шт'
+}
+
+function normalizeProductOrder(products: Product[]): Product[] {
+  return products
+    .slice()
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .map((item, index) => ({
+      ...item,
+      orderIndex: index,
+    }))
+}
+
+function normalizePreparedOrder(items: PreparedItem[]): PreparedItem[] {
+  return items
+    .slice()
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .map((item, index) => ({
+      ...item,
+      orderIndex: index,
+    }))
+}
+
+function migrateOldState(raw: unknown): AppState {
+  const old = raw as {
+    products?: Array<{
+      id?: string
+      name?: string
+      unit?: string
+      orderIndex?: number
+      latestUnitPrice?: number
+    }>
+    sessions?: Array<{
+      id?: string
+      budgetTotal?: number
+      items?: Array<{
+        id?: string
+        productId?: string
+        plannedQty?: number
+        plannedOrder?: number
+        estimatedUnitPrice?: number
+        actualUnitPrice?: number
+        picked?: boolean
+        removed?: boolean
+      }>
+      updatedAt?: string
+    }>
+    activeSessionId?: string
+    history?: Array<{
+      sessionId?: string
+      productId?: string
+      productName?: string
+      qty?: number
+      roundedUnitPrice?: number
+      total?: number
+      purchasedAt?: string
+    }>
+  }
+
+  const migratedProducts: Product[] = Array.isArray(old.products)
+    ? normalizeProductOrder(
+        old.products
+          .filter((p) => typeof p.id === 'string' && typeof p.name === 'string')
+          .map((p, index) => ({
+            id: p.id as string,
+            name: (p.name ?? '').trim() || 'Без названия',
+            unit: p.unit === 'liters' || p.unit === 'grams' ? p.unit : 'pieces',
+            targetQty: 1,
+            orderIndex: Number.isFinite(p.orderIndex) ? (p.orderIndex as number) : index,
+            latestUnitPrice:
+              typeof p.latestUnitPrice === 'number' && p.latestUnitPrice > 0
+                ? p.latestUnitPrice
+                : null,
+            createdAt: nowIso(),
+            updatedAt: nowIso(),
+          }))
+      )
+    : []
+
+  const activeSession =
+    Array.isArray(old.sessions) && old.activeSessionId
+      ? old.sessions.find((session) => session.id === old.activeSessionId)
+      : undefined
+
+  const migratedPrepared: PreparedItem[] = activeSession?.items
+    ? normalizePreparedOrder(
+        activeSession.items
+          .filter((item) => !item.removed && typeof item.productId === 'string')
+          .map((item, index) => ({
+            id: item.id ?? generateId(),
+            productId: item.productId as string,
+            qty:
+              typeof item.plannedQty === 'number' && item.plannedQty > 0
+                ? Math.floor(item.plannedQty)
+                : 1,
+            orderIndex:
+              typeof item.plannedOrder === 'number' ? item.plannedOrder : index,
+            estimatedUnitPrice:
+              typeof item.estimatedUnitPrice === 'number' && item.estimatedUnitPrice > 0
+                ? item.estimatedUnitPrice
+                : null,
+            actualUnitPrice:
+              typeof item.actualUnitPrice === 'number' && item.actualUnitPrice > 0
+                ? item.actualUnitPrice
+                : null,
+            picked: Boolean(item.picked),
+          }))
+      )
+    : []
+
+  const historyMap = new Map<string, HistorySession>()
+  if (Array.isArray(old.history)) {
+    old.history.forEach((entry) => {
+      if (!entry.sessionId || !entry.productId) {
+        return
+      }
+      const existing = historyMap.get(entry.sessionId)
+      const historyItem: HistoryItem = {
+        id: generateId(),
+        productId: entry.productId,
+        productName: entry.productName ?? 'Товар',
+        unit: 'pieces',
+        qty: entry.qty && entry.qty > 0 ? Math.floor(entry.qty) : 1,
+        estimatedUnitPrice: null,
+        actualUnitPrice:
+          typeof entry.roundedUnitPrice === 'number' && entry.roundedUnitPrice > 0
+            ? entry.roundedUnitPrice
+            : null,
+        total: typeof entry.total === 'number' && entry.total > 0 ? entry.total : 0,
+      }
+
+      if (existing) {
+        existing.items.push(historyItem)
+      } else {
+        historyMap.set(entry.sessionId, {
+          id: entry.sessionId,
+          completedAt: entry.purchasedAt ?? nowIso(),
+          budget:
+            typeof activeSession?.budgetTotal === 'number' ? activeSession.budgetTotal : DEFAULT_BUDGET,
+          items: [historyItem],
+        })
+      }
+    })
+  }
+
+  return {
+    products: migratedProducts,
+    preparedItems: migratedPrepared,
+    history: Array.from(historyMap.values()).sort((a, b) =>
+      new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+    ),
+    settings: {
+      defaultBudget:
+        typeof activeSession?.budgetTotal === 'number' && activeSession.budgetTotal > 0
+          ? activeSession.budgetTotal
+          : DEFAULT_BUDGET,
+    },
+  }
+}
+
+function loadState(): AppState {
+  const stored = safeLoad<unknown>(STORAGE_KEY, null)
+  if (stored && typeof stored === 'object') {
+    const typed = stored as AppState
+    if (
+      Array.isArray(typed.products) &&
+      Array.isArray(typed.preparedItems) &&
+      Array.isArray(typed.history) &&
+      typed.settings &&
+      typeof typed.settings.defaultBudget === 'number'
+    ) {
+      return {
+        products: normalizeProductOrder(
+          typed.products.map((product) => ({
+            ...product,
+            unit:
+              product.unit === 'liters' || product.unit === 'grams' ? product.unit : 'pieces',
+            targetQty: product.targetQty && product.targetQty > 0 ? Math.floor(product.targetQty) : 1,
+            latestUnitPrice:
+              typeof product.latestUnitPrice === 'number' && product.latestUnitPrice > 0
+                ? product.latestUnitPrice
+                : null,
+          }))
+        ),
+        preparedItems: normalizePreparedOrder(
+          typed.preparedItems.map((item) => ({
+            ...item,
+            qty: item.qty && item.qty > 0 ? Math.floor(item.qty) : 1,
+            estimatedUnitPrice:
+              typeof item.estimatedUnitPrice === 'number' && item.estimatedUnitPrice > 0
+                ? item.estimatedUnitPrice
+                : null,
+            actualUnitPrice:
+              typeof item.actualUnitPrice === 'number' && item.actualUnitPrice > 0
+                ? item.actualUnitPrice
+                : null,
+          }))
+        ),
+        history: typed.history,
+        settings: {
+          defaultBudget:
+            typed.settings.defaultBudget > 0
+              ? Math.floor(typed.settings.defaultBudget)
+              : DEFAULT_BUDGET,
+        },
+      }
+    }
+    return migrateOldState(stored)
+  }
+
+  const oldV2 = safeLoad<unknown>('sg_state_v2', null)
+  if (oldV2) {
+    return migrateOldState(oldV2)
+  }
+
+  return defaultState
+}
+
+function SortableRow({
+  id,
+  children,
+  className,
+}: {
+  id: string
+  children: ReactNode
+  className?: string
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`line-row sortable-row${isDragging ? ' dragging' : ''}${className ? ` ${className}` : ''}`}
+    >
+      <button
+        type="button"
+        className="drag-handle"
+        ref={setActivatorNodeRef}
+        {...attributes}
+        {...listeners}
+        aria-label="Перетащить"
+      >
+        <GripVertical size={18} />
+      </button>
+      {children}
+    </div>
+  )
 }
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('catalog')
   const [state, setState] = useState<AppState>(() => loadState())
   const [newProductName, setNewProductName] = useState('')
-  const [newProductUnit, setNewProductUnit] = useState('шт')
+  const [newProductQty, setNewProductQty] = useState('1')
+  const [newProductUnit, setNewProductUnit] = useState<Unit>('pieces')
   const [newProductPrice, setNewProductPrice] = useState('')
-  const [newProductStatus, setNewProductStatus] = useState<StockStatus>('out')
-  const [draftBudget, setDraftBudget] = useState('5000')
-  const [draftRoundingStep, setDraftRoundingStep] =
-    useState<PriceRoundingStep>(10)
-  const [showAddForm, setShowAddForm] = useState(false)
+  const [undoAction, setUndoAction] = useState<UndoAction | undefined>(undefined)
+  const [catalogBulkMode, setCatalogBulkMode] = useState(false)
+  const [preparedBulkMode, setPreparedBulkMode] = useState(false)
+  const [catalogSelectedIds, setCatalogSelectedIds] = useState<Set<ID>>(() => new Set())
+  const [preparedSelectedIds, setPreparedSelectedIds] = useState<Set<ID>>(() => new Set())
+  const [shortageDialog, setShortageDialog] = useState<ShortageDialogState | undefined>(undefined)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  )
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_STATE_V2, JSON.stringify(state))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   }, [state])
 
-  const activeSession =
-    state.activeSessionId === undefined
-      ? undefined
-      : state.sessions.find((session) => session.id === state.activeSessionId)
+  useEffect(() => {
+    if (!undoAction) return
 
-  const orderedProducts = state.products
-    .slice()
-    .sort((a, b) => a.orderIndex - b.orderIndex)
+    const timeoutMs = Math.max(0, undoAction.expiresAt - Date.now())
+    const timeoutId = window.setTimeout(() => {
+      setUndoAction((current) =>
+        current?.id === undoAction.id ? undefined : current
+      )
+    }, timeoutMs)
 
-  const productMap = useMemo(
-    () => new Map(state.products.map((p) => [p.id, p])),
+    return () => window.clearTimeout(timeoutId)
+  }, [undoAction])
+
+  const orderedProducts = useMemo(
+    () => state.products.slice().sort((a, b) => a.orderIndex - b.orderIndex),
     [state.products]
   )
 
-  const orderedSessionItems = normalizeOrder(activeSession?.items ?? []).filter(
-    (item) => !item.removed
+  const productMap = useMemo(
+    () => new Map(state.products.map((product) => [product.id, product])),
+    [state.products]
   )
 
-  const zoneItems = orderedSessionItems.reduce<
-    Array<ShoppingItem & { estimatedTotal: number; inZone: boolean }>
-  >((acc, item) => {
-    const coveredSoFar = acc
-      .filter((accItem) => accItem.inZone)
-      .reduce((sum, accItem) => sum + accItem.estimatedTotal, 0)
-    const estimatedTotal = item.estimatedUnitPrice * item.plannedQty
-    const inZone = coveredSoFar + estimatedTotal <= (activeSession?.budgetTotal ?? 0)
-    acc.push({
-      ...item,
-      estimatedTotal,
-      inZone,
+  const preparedItems = useMemo(
+    () => state.preparedItems.slice().sort((a, b) => a.orderIndex - b.orderIndex),
+    [state.preparedItems]
+  )
+
+  const zoneItems = useMemo<ZoneItem[]>(() => {
+    const budget = state.settings.defaultBudget
+
+    const reduced = preparedItems.reduce<{
+      covered: number
+      items: ZoneItem[]
+    }>(
+      (acc, item) => {
+        const estimatedTotal =
+          item.estimatedUnitPrice === null ? null : item.estimatedUnitPrice * item.qty
+        const inZone =
+          estimatedTotal !== null &&
+          estimatedTotal > 0 &&
+          acc.covered + estimatedTotal <= budget
+
+        return {
+          covered: inZone && estimatedTotal !== null ? acc.covered + estimatedTotal : acc.covered,
+          items: [
+            ...acc.items,
+            {
+              ...item,
+              estimatedTotal,
+              inZone,
+            },
+          ],
+        }
+      },
+      {
+        covered: 0,
+        items: [],
+      }
+    )
+
+    return reduced.items
+  }, [preparedItems, state.settings.defaultBudget])
+
+  const coveredTotal = zoneItems.reduce(
+    (sum, item) => (item.inZone && item.estimatedTotal !== null ? sum + item.estimatedTotal : sum),
+    0
+  )
+
+  const budgetRemaining = Math.max(0, state.settings.defaultBudget - coveredTotal)
+
+  const inStoreSpent = preparedItems.reduce((sum, item) => {
+    if (!item.picked || item.actualUnitPrice === null) {
+      return sum
+    }
+    return sum + item.actualUnitPrice * item.qty
+  }, 0)
+
+  const inStoreRemaining = state.settings.defaultBudget - inStoreSpent
+
+  const candidateProducts = orderedProducts.filter(
+    (product) => !preparedItems.some((item) => item.productId === product.id)
+  )
+
+  const createUndo = (message: string, previousState: AppState) => {
+    setUndoAction({
+      id: generateId(),
+      message,
+      previousState,
+      expiresAt: Date.now() + 5000,
     })
-    return acc
-  }, [])
+  }
 
-  const coveredTotal = zoneItems
-    .filter((item) => item.inZone)
-    .reduce((sum, item) => sum + item.estimatedTotal, 0)
+  const applyWithUndo = (message: string, updater: (prev: AppState) => AppState) => {
+    setState((prev) => {
+      const previousState = deepCloneState(prev)
+      const next = updater(prev)
+      createUndo(message, previousState)
+      return next
+    })
+  }
 
-  const deferredItems = zoneItems.filter((item) => !item.inZone)
-  const nextDeferred = deferredItems[0]
-  const budgetRemainingForPlan = Math.max((activeSession?.budgetTotal ?? 0) - coveredTotal, 0)
+  const undoLastDelete = () => {
+    if (!undoAction) {
+      return
+    }
+    setState(undoAction.previousState)
+    setUndoAction(undefined)
+    setCatalogBulkMode(false)
+    setPreparedBulkMode(false)
+    setCatalogSelectedIds(new Set())
+    setPreparedSelectedIds(new Set())
+  }
 
-  const inStoreSpent = zoneItems
-    .filter((item) => item.picked)
-    .reduce((sum, item) => {
-      const rounded = roundUpToStep(
-        item.actualUnitPrice,
-        activeSession?.roundingStep ?? 10
-      )
-      return sum + rounded * item.plannedQty
-    }, 0)
-
-  const inStoreRemaining = (activeSession?.budgetTotal ?? 0) - inStoreSpent
+  const updateBudget = (value: string) => {
+    const parsed = Math.floor(toNumber(value, DEFAULT_BUDGET))
+    setState((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        defaultBudget: parsed > 0 ? parsed : DEFAULT_BUDGET,
+      },
+    }))
+  }
 
   const addProduct = () => {
     const name = newProductName.trim()
-    const unit = newProductUnit.trim() || 'шт'
-    const price = clampNonNegative(toNumber(newProductPrice, 0))
-    if (!name) return
+    if (!name) {
+      return
+    }
+
+    const targetQty = parsePositiveInt(newProductQty, 1)
+    const price = parsePriceInput(newProductPrice)
 
     setState((prev) => {
-      const createdAt = nowIso()
+      const timestamp = nowIso()
       const nextProduct: Product = {
         id: generateId(),
         name,
-        unit,
-        stockStatus: newProductStatus,
+        unit: newProductUnit,
+        targetQty,
         orderIndex: prev.products.length,
         latestUnitPrice: price,
-        createdAt,
-        updatedAt: createdAt,
+        createdAt: timestamp,
+        updatedAt: timestamp,
       }
+
       return {
         ...prev,
         products: [...prev.products, nextProduct],
@@ -318,42 +627,22 @@ export default function App() {
     })
 
     setNewProductName('')
-    setNewProductUnit('шт')
+    setNewProductQty('1')
+    setNewProductUnit('pieces')
     setNewProductPrice('')
-    setNewProductStatus('out')
-    setShowAddForm(false)
   }
 
-  const handleNewProductKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') addProduct()
+  const handleNewProductKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      addProduct()
+    }
   }
 
-  const deleteProduct = (id: string) => {
-    setState((prev) => {
-      const remainingProducts = prev.products
-        .filter((p) => p.id !== id)
-        .map((p, index) => ({ ...p, orderIndex: index }))
-
-      const sessions = prev.sessions.map((session) => ({
-        ...session,
-        items: normalizeOrder(session.items.filter((item) => item.productId !== id)),
-        updatedAt: nowIso(),
-      }))
-
-      return {
-        ...prev,
-        products: remainingProducts,
-        sessions,
-        history: prev.history.filter((entry) => entry.productId !== id),
-      }
-    })
-  }
-
-  const updateProduct = (id: string, patch: Partial<Product>) => {
+  const updateProduct = (productId: ID, patch: Partial<Product>) => {
     setState((prev) => ({
       ...prev,
       products: prev.products.map((product) =>
-        product.id === id
+        product.id === productId
           ? {
               ...product,
               ...patch,
@@ -364,639 +653,956 @@ export default function App() {
     }))
   }
 
-  const moveProductOrder = (id: string, direction: -1 | 1) => {
+  const onCatalogDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) {
+      return
+    }
+
     setState((prev) => {
-      const ordered = prev.products.slice().sort((a, b) => a.orderIndex - b.orderIndex)
-      const index = ordered.findIndex((p) => p.id === id)
-      const nextIndex = index + direction
-      if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) {
+      const sorted = prev.products.slice().sort((a, b) => a.orderIndex - b.orderIndex)
+      const oldIndex = sorted.findIndex((item) => item.id === active.id)
+      const newIndex = sorted.findIndex((item) => item.id === over.id)
+      if (oldIndex < 0 || newIndex < 0) {
         return prev
       }
 
-      const swapped = ordered.slice()
-      const temp = swapped[index]
-      swapped[index] = swapped[nextIndex]
-      swapped[nextIndex] = temp
+      const moved = arrayMove(sorted, oldIndex, newIndex).map((item, index) => ({
+        ...item,
+        orderIndex: index,
+        updatedAt: nowIso(),
+      }))
 
       return {
         ...prev,
-        products: swapped.map((p, idx) => ({ ...p, orderIndex: idx })),
+        products: moved,
       }
     })
   }
 
-  const createDraftSession = () => {
-    const budget = clampNonNegative(toNumber(draftBudget, 0))
-    if (budget <= 0) return
+  const onPreparedDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) {
+      return
+    }
 
     setState((prev) => {
-      const sessionId = generateId()
-      const createdAt = nowIso()
-      const session: ShoppingSession = {
-        id: sessionId,
-        status: 'draft',
-        budgetTotal: budget,
-        roundingStep: draftRoundingStep,
-        items: [],
-        createdAt,
-        updatedAt: createdAt,
+      const sorted = prev.preparedItems.slice().sort((a, b) => a.orderIndex - b.orderIndex)
+      const oldIndex = sorted.findIndex((item) => item.id === active.id)
+      const newIndex = sorted.findIndex((item) => item.id === over.id)
+      if (oldIndex < 0 || newIndex < 0) {
+        return prev
       }
 
       return {
         ...prev,
-        sessions: [...prev.sessions, session],
-        activeSessionId: sessionId,
+        preparedItems: arrayMove(sorted, oldIndex, newIndex).map((item, index) => ({
+          ...item,
+          orderIndex: index,
+        })),
       }
     })
   }
 
-  const closeActiveSession = () => {
-    setState((prev) => ({
-      ...prev,
-      activeSessionId: undefined,
-    }))
-  }
+  const confirmDeleteProduct = (product: Product) => {
+    const shouldDelete = window.confirm(`Удалить товар «${product.name}»?`)
+    if (!shouldDelete) {
+      return
+    }
 
-  const updateActiveSession = (updater: (session: ShoppingSession) => ShoppingSession) => {
-    if (!activeSession) return
-    setState((prev) => ({
+    applyWithUndo(`Удален товар «${product.name}»`, (prev) => ({
       ...prev,
-      sessions: prev.sessions.map((session) =>
-        session.id === activeSession.id ? updater(session) : session
+      products: normalizeProductOrder(prev.products.filter((item) => item.id !== product.id)),
+      preparedItems: normalizePreparedOrder(
+        prev.preparedItems.filter((item) => item.productId !== product.id)
       ),
     }))
   }
 
-  const toggleIncludeInSession = (productId: string) => {
-    if (!activeSession || activeSession.status !== 'draft') return
+  const confirmBulkDeleteProducts = () => {
+    if (catalogSelectedIds.size === 0) {
+      return
+    }
 
-    updateActiveSession((session) => {
-      const existing = session.items.find(
-        (item) => item.productId === productId && !item.removed
+    const shouldDelete = window.confirm(
+      `Удалить выбранные товары (${catalogSelectedIds.size})?`
+    )
+    if (!shouldDelete) {
+      return
+    }
+
+    applyWithUndo('Удалены выбранные товары', (prev) => ({
+      ...prev,
+      products: normalizeProductOrder(
+        prev.products.filter((item) => !catalogSelectedIds.has(item.id))
+      ),
+      preparedItems: normalizePreparedOrder(
+        prev.preparedItems.filter((item) => !catalogSelectedIds.has(item.productId))
+      ),
+    }))
+
+    setCatalogSelectedIds(new Set())
+    setCatalogBulkMode(false)
+  }
+
+  const openShortageDialog = (product: Product) => {
+    setShortageDialog({
+      product,
+      qtyDraft: String(product.targetQty),
+    })
+  }
+
+  const addToPreparedWithShortage = () => {
+    if (!shortageDialog) {
+      return
+    }
+
+    const qtyToAdd = parsePositiveInt(shortageDialog.qtyDraft, shortageDialog.product.targetQty)
+
+    setState((prev) => {
+      const existing = prev.preparedItems.find(
+        (item) => item.productId === shortageDialog.product.id
       )
 
       if (existing) {
         return {
-          ...session,
-          items: normalizeOrder(
-            session.items.map((item) =>
-              item.id === existing.id ? { ...item, removed: true } : item
+          ...prev,
+          preparedItems: normalizePreparedOrder(
+            prev.preparedItems.map((item) =>
+              item.id === existing.id
+                ? {
+                    ...item,
+                    qty: item.qty + qtyToAdd,
+                  }
+                : item
             )
           ),
-          updatedAt: nowIso(),
         }
       }
 
-      const product = productMap.get(productId)
-      const newItem: ShoppingItem = {
+      const newItem: PreparedItem = {
         id: generateId(),
-        productId,
-        plannedQty: 1,
-        plannedOrder: session.items.filter((item) => !item.removed).length,
-        estimatedUnitPrice: product?.latestUnitPrice ?? 0,
+        productId: shortageDialog.product.id,
+        qty: qtyToAdd,
+        orderIndex: prev.preparedItems.length,
+        estimatedUnitPrice: shortageDialog.product.latestUnitPrice,
+        actualUnitPrice: null,
         picked: false,
-        actualUnitPrice: 0,
-        removed: false,
       }
 
       return {
-        ...session,
-        items: normalizeOrder([...session.items, newItem]),
-        updatedAt: nowIso(),
+        ...prev,
+        preparedItems: normalizePreparedOrder([...prev.preparedItems, newItem]),
       }
     })
+
+    setShortageDialog(undefined)
   }
 
-  const isIncludedInActiveSession = (productId: string) =>
-    activeSession?.items.some((item) => item.productId === productId && !item.removed) ??
-    false
-
-  const moveShoppingItem = (itemId: string, direction: -1 | 1) => {
-    if (!activeSession || activeSession.status !== 'draft') return
-    updateActiveSession((session) => {
-      const activeItems = normalizeOrder(session.items.filter((item) => !item.removed))
-      const index = activeItems.findIndex((item) => item.id === itemId)
-      const nextIndex = index + direction
-      if (index < 0 || nextIndex < 0 || nextIndex >= activeItems.length) {
-        return session
-      }
-
-      const reordered = activeItems.slice()
-      const temp = reordered[index]
-      reordered[index] = reordered[nextIndex]
-      reordered[nextIndex] = temp
-
-      const reorderedIds = reordered.map((item) => item.id)
-      const updatedItems = session.items.map((item) => {
-        const order = reorderedIds.indexOf(item.id)
-        if (order === -1) return item
-        return { ...item, plannedOrder: order }
-      })
-
-      return {
-        ...session,
-        items: updatedItems,
-        updatedAt: nowIso(),
-      }
-    })
-  }
-
-  const updateSessionItemNumericFromInput = (
-    itemId: string,
-    field: 'plannedQty' | 'estimatedUnitPrice' | 'actualUnitPrice',
-    e: ChangeEvent<HTMLInputElement>
-  ) => {
-    if (!activeSession) return
-    updateActiveSession((session) => ({
-      ...session,
-      items: session.items.map((item) =>
+  const updatePreparedQty = (itemId: ID, nextQty: number) => {
+    setState((prev) => ({
+      ...prev,
+      preparedItems: prev.preparedItems.map((item) =>
         item.id === itemId
           ? {
               ...item,
-              [field]: clampNonNegative(toNumber(e.target.value, 0)),
+              qty: Math.max(1, Math.floor(nextQty)),
             }
           : item
       ),
-      updatedAt: nowIso(),
     }))
   }
 
-  const startShopping = () => {
-    if (!activeSession || activeSession.status !== 'draft') return
-    updateActiveSession((session) => ({
-      ...session,
-      status: 'in_progress',
-      updatedAt: nowIso(),
-    }))
-    setTab('store')
-  }
-
-  const togglePicked = (itemId: string) => {
-    if (!activeSession || activeSession.status !== 'in_progress') return
-    updateActiveSession((session) => ({
-      ...session,
-      items: session.items.map((item) =>
-        item.id === itemId ? { ...item, picked: !item.picked } : item
+  const updatePreparedPriceFromInput = (
+    itemId: ID,
+    field: 'estimatedUnitPrice' | 'actualUnitPrice',
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = parsePriceInput(event.target.value)
+    setState((prev) => ({
+      ...prev,
+      preparedItems: prev.preparedItems.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item
       ),
-      updatedAt: nowIso(),
     }))
   }
 
-  const removeSessionItem = (itemId: string) => {
-    if (!activeSession) return
-    updateActiveSession((session) => ({
-      ...session,
-      items: normalizeOrder(
-        session.items.map((item) =>
-          item.id === itemId ? { ...item, removed: true, picked: false } : item
-        )
+  const togglePicked = (itemId: ID) => {
+    setState((prev) => ({
+      ...prev,
+      preparedItems: prev.preparedItems.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              picked: !item.picked,
+            }
+          : item
       ),
-      updatedAt: nowIso(),
     }))
   }
 
-  const completeSession = () => {
-    if (!activeSession || activeSession.status !== 'in_progress') return
+  const confirmDeletePreparedItem = (item: PreparedItem) => {
+    const productName = productMap.get(item.productId)?.name ?? 'Товар'
+    const shouldDelete = window.confirm(`Удалить из списка «${productName}»?`)
+    if (!shouldDelete) {
+      return
+    }
 
-    const completedAt = nowIso()
-    const pickedItems = normalizeOrder(activeSession.items).filter(
-      (item) => !item.removed && item.picked
+    applyWithUndo(`Удален элемент «${productName}»`, (prev) => ({
+      ...prev,
+      preparedItems: normalizePreparedOrder(
+        prev.preparedItems.filter((entry) => entry.id !== item.id)
+      ),
+    }))
+  }
+
+  const confirmBulkDeletePrepared = () => {
+    if (preparedSelectedIds.size === 0) {
+      return
+    }
+
+    const shouldDelete = window.confirm(
+      `Удалить выбранные элементы (${preparedSelectedIds.size})?`
     )
+    if (!shouldDelete) {
+      return
+    }
 
-    const entries: PurchaseHistoryEntry[] = pickedItems.map((item) => {
-      const product = productMap.get(item.productId)
-      const rounded = roundUpToStep(item.actualUnitPrice, activeSession.roundingStep)
-      return {
-        id: generateId(),
-        sessionId: activeSession.id,
-        productId: item.productId,
-        productName: product?.name ?? 'Удаленный товар',
-        qty: item.plannedQty,
-        roundedUnitPrice: rounded,
-        total: rounded * item.plannedQty,
-        purchasedAt: completedAt,
-      }
-    })
+    applyWithUndo('Удалены выбранные элементы списка', (prev) => ({
+      ...prev,
+      preparedItems: normalizePreparedOrder(
+        prev.preparedItems.filter((item) => !preparedSelectedIds.has(item.id))
+      ),
+    }))
+
+    setPreparedSelectedIds(new Set())
+    setPreparedBulkMode(false)
+  }
+
+  const completePurchases = () => {
+    if (preparedItems.length === 0) {
+      return
+    }
+
+    const shouldComplete = window.confirm('Завершить покупки и перенести в историю?')
+    if (!shouldComplete) {
+      return
+    }
 
     setState((prev) => {
+      const completedAt = nowIso()
+      const historyItems: HistoryItem[] = normalizePreparedOrder(prev.preparedItems).map((item) => {
+        const product = prev.products.find((entry) => entry.id === item.productId)
+        const chosenPrice = item.actualUnitPrice ?? item.estimatedUnitPrice
+
+        return {
+          id: generateId(),
+          productId: item.productId,
+          productName: product?.name ?? 'Товар',
+          unit: product?.unit ?? 'pieces',
+          qty: item.qty,
+          estimatedUnitPrice: item.estimatedUnitPrice,
+          actualUnitPrice: item.actualUnitPrice,
+          total: chosenPrice === null ? 0 : chosenPrice * item.qty,
+        }
+      })
+
       const updatedProducts = prev.products.map((product) => {
-        const latestForProduct = entries
-          .filter((entry) => entry.productId === product.id)
-          .at(-1)
-        if (!latestForProduct) return product
+        const lastForProduct = historyItems.filter((item) => item.productId === product.id).at(-1)
+        if (!lastForProduct) {
+          return product
+        }
+
+        const latest = lastForProduct.actualUnitPrice ?? lastForProduct.estimatedUnitPrice
+
         return {
           ...product,
-          latestUnitPrice: latestForProduct.roundedUnitPrice,
+          latestUnitPrice: latest,
           updatedAt: completedAt,
         }
       })
 
-      const updatedSessions = prev.sessions.map((session) =>
-        session.id === activeSession.id
-          ? {
-              ...session,
-              status: 'completed' as const,
-              completedAt,
-              updatedAt: completedAt,
-            }
-          : session
-      )
+      const nextSession: HistorySession = {
+        id: generateId(),
+        completedAt,
+        budget: prev.settings.defaultBudget,
+        items: historyItems,
+      }
 
       return {
         ...prev,
         products: updatedProducts,
-        sessions: updatedSessions,
-        history: [...prev.history, ...entries],
-        activeSessionId: undefined,
+        preparedItems: [],
+        history: [nextSession, ...prev.history],
       }
     })
 
+    setPreparedBulkMode(false)
+    setPreparedSelectedIds(new Set())
     setTab('history')
   }
+
+  const restoreFromHistory = (session: HistorySession) => {
+    if (preparedItems.length > 0) {
+      const shouldReplace = window.confirm(
+        'Текущий список покупок не пуст. Заменить его выбранной историей?'
+      )
+      if (!shouldReplace) {
+        return
+      }
+    }
+
+    setState((prev) => {
+      const restoredItems: PreparedItem[] = session.items.map((item, index) => ({
+        id: generateId(),
+        productId: item.productId,
+        qty: item.qty,
+        orderIndex: index,
+        estimatedUnitPrice: item.estimatedUnitPrice,
+        actualUnitPrice: null,
+        picked: false,
+      }))
+
+      return {
+        ...prev,
+        preparedItems: normalizePreparedOrder(restoredItems),
+      }
+    })
+
+    setTab('preparation')
+  }
+
+  const nextDeferred = zoneItems.find((item) => !item.inZone)
 
   return (
     <div className="app">
       <header className="app-header">
-        <ShoppingCart className="header-icon" size={28} />
+        <ShoppingCart className="header-icon" size={24} />
         <span>Умные покупки</span>
       </header>
 
       {tab === 'catalog' && (
         <main className="tab-content">
-          <div className="flex-row">
-            <h2 className="section-title flex-1">Ассортимент продуктов</h2>
-            <button className="btn btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
-              <Plus size={18} /> Добавить
-            </button>
-          </div>
-
-          {showAddForm && (
-            <div className="card">
-              <div className="input-group">
-                <label className="input-label">Название</label>
-                <input
-                  className="modern-input"
-                  type="text"
-                  placeholder="Например: Молоко"
-                  value={newProductName}
-                  onChange={(e) => setNewProductName(e.target.value)}
-                  onKeyDown={handleNewProductKeyDown}
-                  autoFocus
-                />
-              </div>
-              <div className="flex-row">
-                <div className="input-group flex-1">
-                  <label className="input-label">Цена</label>
-                  <input
-                    className="modern-input"
-                    type="number"
-                    min={0}
-                    placeholder="0"
-                    value={newProductPrice}
-                    onChange={(e) => setNewProductPrice(e.target.value)}
-                  />
-                </div>
-                <div className="input-group" style={{ width: '80px' }}>
-                  <label className="input-label">Ед.</label>
-                  <input
-                    className="modern-input"
-                    type="text"
-                    value={newProductUnit}
-                    onChange={(e) => setNewProductUnit(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="input-group">
-                <label className="input-label">Статус</label>
-                <select
-                  className="modern-select"
-                  value={newProductStatus}
-                  onChange={(e) => setNewProductStatus(e.target.value as StockStatus)}
-                >
-                  <option value="out">Нужно купить</option>
-                  <option value="low">Мало</option>
-                  <option value="in_stock">В наличии</option>
-                </select>
-              </div>
+          <section className="panel">
+            <h2 className="panel-title">Добавить товар</h2>
+            <div className="form-row">
+              <input
+                className="field"
+                type="text"
+                placeholder="Название"
+                value={newProductName}
+                onChange={(event) => setNewProductName(event.target.value)}
+                onKeyDown={handleNewProductKeyDown}
+              />
+              <select
+                className="field field-sm"
+                value={newProductUnit}
+                onChange={(event) => setNewProductUnit(event.target.value as Unit)}
+              >
+                <option value="pieces">Штуки</option>
+                <option value="liters">Литры</option>
+                <option value="grams">Граммы</option>
+              </select>
+              <input
+                className="field field-sm"
+                type="number"
+                min={1}
+                value={newProductQty}
+                onChange={(event) => setNewProductQty(event.target.value)}
+              />
+              <input
+                className="field field-sm"
+                type="number"
+                min={0}
+                placeholder="Цена"
+                value={newProductPrice}
+                onChange={(event) => setNewProductPrice(event.target.value)}
+              />
               <button className="btn btn-primary" onClick={addProduct}>
-                Сохранить
+                <Plus size={16} /> Добавить
               </button>
             </div>
-          )}
+          </section>
 
-          {orderedProducts.length === 0 ? (
-            <div className="empty-state">
-              <PackageOpen size={48} className="empty-icon" />
-              <h3>Ассортимент пуст</h3>
-              <p>Добавьте свои первые продукты, чтобы начать составлять списки покупок.</p>
+          <section className="panel">
+            <div className="panel-toolbar">
+              <h2 className="panel-title">Ассортимент</h2>
+              <div className="toolbar-actions">
+                <button
+                  className={`btn ${catalogBulkMode ? 'btn-danger' : 'btn-outline'}`}
+                  onClick={() => {
+                    setCatalogBulkMode((prev) => !prev)
+                    setCatalogSelectedIds(new Set())
+                  }}
+                >
+                  {catalogBulkMode ? 'Отмена' : 'Массовое удаление'}
+                </button>
+                {catalogBulkMode && (
+                  <button
+                    className="btn btn-danger"
+                    disabled={catalogSelectedIds.size === 0}
+                    onClick={confirmBulkDeleteProducts}
+                  >
+                    <Trash2 size={16} /> Удалить ({catalogSelectedIds.size})
+                  </button>
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="list-container">
-              {orderedProducts.map((product) => (
-                <div key={product.id} className="list-item">
-                  <div className="item-header">
-                    <div className="item-title-col">
-                      <input
-                        className="item-title modern-input"
-                        style={{ padding: '4px 8px', margin: '-4px -8px', width: '100%', border: '1px solid transparent' }}
-                        value={product.name}
-                        onChange={(e) => updateProduct(product.id, { name: e.target.value })}
-                      />
-                      <div className="item-subtitle" style={{marginTop: '4px'}}>
-                        <span className={`badge badge-${product.stockStatus}`}>
-                          {getStockStatusLabel(product.stockStatus)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="item-actions">
-                      <button className="btn-icon" onClick={() => moveProductOrder(product.id, -1)}><ArrowUp size={20} /></button>
-                      <button className="btn-icon" onClick={() => moveProductOrder(product.id, 1)}><ArrowDown size={20} /></button>
-                      <button className="btn-icon danger" onClick={() => deleteProduct(product.id)}><Trash2 size={20} /></button>
-                    </div>
+
+            {orderedProducts.length === 0 ? (
+              <div className="empty-state small">
+                <PackageOpen size={32} />
+                <p>Ассортимент пока пуст.</p>
+              </div>
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={onCatalogDragEnd}
+              >
+                <SortableContext
+                  items={orderedProducts.map((item) => item.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="list">
+                    {orderedProducts.map((product) => (
+                      <SortableRow key={product.id} id={product.id}>
+                        {catalogBulkMode && (
+                          <input
+                            type="checkbox"
+                            checked={catalogSelectedIds.has(product.id)}
+                            onChange={(event) => {
+                              const next = new Set(catalogSelectedIds)
+                              if (event.target.checked) {
+                                next.add(product.id)
+                              } else {
+                                next.delete(product.id)
+                              }
+                              setCatalogSelectedIds(next)
+                            }}
+                          />
+                        )}
+                        <input
+                          className="row-name"
+                          type="text"
+                          value={product.name}
+                          onChange={(event) =>
+                            updateProduct(product.id, {
+                              name: event.target.value,
+                            })
+                          }
+                        />
+                        <div className="counter-wrap">
+                          <button
+                            className="counter-btn"
+                            onClick={() => updateProduct(product.id, { targetQty: Math.max(1, product.targetQty - 1) })}
+                          >
+                            -
+                          </button>
+                          <input
+                            className="counter-input"
+                            type="number"
+                            min={1}
+                            value={product.targetQty}
+                            onChange={(event) =>
+                              updateProduct(product.id, {
+                                targetQty: parsePositiveInt(event.target.value, 1),
+                              })
+                            }
+                          />
+                          <button
+                            className="counter-btn"
+                            onClick={() => updateProduct(product.id, { targetQty: product.targetQty + 1 })}
+                          >
+                            +
+                          </button>
+                        </div>
+                        <select
+                          className="row-unit"
+                          value={product.unit}
+                          onChange={(event) =>
+                            updateProduct(product.id, {
+                              unit: event.target.value as Unit,
+                            })
+                          }
+                        >
+                          <option value="pieces">Шт</option>
+                          <option value="liters">Л</option>
+                          <option value="grams">Г</option>
+                        </select>
+                        <input
+                          className="row-price"
+                          type="number"
+                          min={0}
+                          placeholder="?"
+                          value={product.latestUnitPrice ?? ''}
+                          onChange={(event) =>
+                            updateProduct(product.id, {
+                              latestUnitPrice: parsePriceInput(event.target.value),
+                            })
+                          }
+                        />
+                        <span className="row-muted">{formatPrice(product.latestUnitPrice)}</span>
+                        <button
+                          className="btn-icon danger"
+                          onClick={() => confirmDeleteProduct(product)}
+                          disabled={catalogBulkMode}
+                          aria-label="Удалить"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </SortableRow>
+                    ))}
                   </div>
-                  <div className="item-controls-row">
-                    <select
-                      className="modern-select"
-                      style={{ width: '140px', padding: '6px' }}
-                      value={product.stockStatus}
-                      onChange={(e) => updateProduct(product.id, { stockStatus: e.target.value as StockStatus })}
-                    >
-                      <option value="out">Нужно купить</option>
-                      <option value="low">Мало</option>
-                      <option value="in_stock">В наличии</option>
-                    </select>
-                    <div className="inline-edit flex-1">
-                      <input
-                        className="inline-input"
-                        style={{flex: 1, textAlign: 'right'}}
-                        type="number"
-                        min={0}
-                        value={product.latestUnitPrice || ''}
-                        placeholder="Цена"
-                        onChange={(e) => updateProduct(product.id, { latestUnitPrice: clampNonNegative(toNumber(e.target.value, 0)) })}
-                      />
-                      <span style={{color: 'var(--color-text-secondary)', paddingRight: '8px'}}>RSD /{product.unit}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                </SortableContext>
+              </DndContext>
+            )}
+          </section>
         </main>
       )}
 
       {tab === 'preparation' && (
         <main className="tab-content">
-          {!activeSession ? (
-            <div className="empty-state">
-              <ClipboardList size={48} className="empty-icon" />
-              <h3>Подготовка к покупкам</h3>
-              <p>Создайте новую сессию, чтобы распланировать бюджет и выбрать товары.</p>
-              <div className="card" style={{width: '100%', marginTop: '16px', textAlign: 'left'}}>
-                <div className="input-group">
-                  <label className="input-label">Бюджет (RSD)</label>
-                  <input className="modern-input" type="number" min={0} value={draftBudget} onChange={(e) => setDraftBudget(e.target.value)} />
-                </div>
-                <div className="input-group">
-                  <label className="input-label">Округление цен</label>
-                  <select className="modern-select" value={draftRoundingStep} onChange={(e) => setDraftRoundingStep(Number(e.target.value) as PriceRoundingStep)}>
-                    <option value={10}>10</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </div>
-                <button className="btn btn-primary" onClick={createDraftSession}>Создать план</button>
+          <section className="panel">
+            <h2 className="panel-title">Бюджет</h2>
+            <div className="budget-row">
+              <label htmlFor="budget-preparation">Общий бюджет (RSD)</label>
+              <input
+                id="budget-preparation"
+                className="field field-sm"
+                type="number"
+                min={1}
+                value={state.settings.defaultBudget}
+                onChange={(event) => updateBudget(event.target.value)}
+              />
+            </div>
+            <div className="budget-summary-line">
+              <span>В зоне бюджета: {formatCurrencyRsd(coveredTotal)}</span>
+              <span>Остаток: {formatCurrencyRsd(budgetRemaining)}</span>
+            </div>
+            {nextDeferred && (
+              <div className="budget-warning">
+                <AlertCircle size={16} />
+                <span>
+                  Остаток {formatCurrencyRsd(budgetRemaining)} не покрывает следующий товар.
+                </span>
+              </div>
+            )}
+          </section>
+
+          <section className="panel">
+            <div className="panel-toolbar">
+              <h2 className="panel-title">Отмеченные к покупке</h2>
+              <div className="toolbar-actions">
+                <button
+                  className={`btn ${preparedBulkMode ? 'btn-danger' : 'btn-outline'}`}
+                  onClick={() => {
+                    setPreparedBulkMode((prev) => !prev)
+                    setPreparedSelectedIds(new Set())
+                  }}
+                >
+                  {preparedBulkMode ? 'Отмена' : 'Массовое удаление'}
+                </button>
+                {preparedBulkMode && (
+                  <button
+                    className="btn btn-danger"
+                    disabled={preparedSelectedIds.size === 0}
+                    onClick={confirmBulkDeletePrepared}
+                  >
+                    <Trash2 size={16} /> Удалить ({preparedSelectedIds.size})
+                  </button>
+                )}
               </div>
             </div>
-          ) : (
-            <>
-              <div className="budget-summary">
-                <div className="budget-summary-row">
-                  <span>Общий бюджет:</span>
-                  <strong>{formatCurrencyRsd(activeSession.budgetTotal)}</strong>
-                </div>
-                <div className="budget-summary-row" style={{color: 'var(--color-bought-text)'}}>
-                  <span>В зоне бюджета:</span>
-                  <strong>{formatCurrencyRsd(coveredTotal)}</strong>
-                </div>
-                <div className="budget-summary-row" style={{color: 'var(--color-warn-text)'}}>
-                  <span>Остаток:</span>
-                  <strong>{formatCurrencyRsd(budgetRemainingForPlan)}</strong>
-                </div>
+
+            {zoneItems.length === 0 ? (
+              <div className="empty-state small">
+                <ClipboardList size={32} />
+                <p>Список покупок пуст.</p>
               </div>
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={onPreparedDragEnd}
+              >
+                <SortableContext
+                  items={zoneItems.map((item) => item.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="list">
+                    {zoneItems.map((item) => {
+                      const product = productMap.get(item.productId)
+                      if (!product) {
+                        return null
+                      }
 
-              {nextDeferred && budgetRemainingForPlan < nextDeferred.estimatedTotal && (
-                <div className="budget-alert">
-                  <AlertCircle size={20} />
-                  <span>Остаток {formatCurrencyRsd(budgetRemainingForPlan)} не покрывает следующий товар «{productMap.get(nextDeferred.productId)?.name}».</span>
-                </div>
-              )}
+                      return (
+                        <SortableRow
+                          key={item.id}
+                          id={item.id}
+                          className={item.inZone ? 'zone-covered' : 'zone-out'}
+                        >
+                          {preparedBulkMode && (
+                            <input
+                              type="checkbox"
+                              checked={preparedSelectedIds.has(item.id)}
+                              onChange={(event) => {
+                                const next = new Set(preparedSelectedIds)
+                                if (event.target.checked) {
+                                  next.add(item.id)
+                                } else {
+                                  next.delete(item.id)
+                                }
+                                setPreparedSelectedIds(next)
+                              }}
+                            />
+                          )}
+                          <span className="row-name static">{product.name}</span>
+                          <div className="counter-wrap">
+                            <button
+                              className="counter-btn"
+                              onClick={() => updatePreparedQty(item.id, item.qty - 1)}
+                            >
+                              -
+                            </button>
+                            <input
+                              className="counter-input"
+                              type="number"
+                              min={1}
+                              value={item.qty}
+                              onChange={(event) =>
+                                updatePreparedQty(item.id, parsePositiveInt(event.target.value, 1))
+                              }
+                            />
+                            <button
+                              className="counter-btn"
+                              onClick={() => updatePreparedQty(item.id, item.qty + 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                          <span className="row-unit fixed">{unitLabel(product.unit)}</span>
+                          <input
+                            className="row-price"
+                            type="number"
+                            min={0}
+                            placeholder="?"
+                            value={item.estimatedUnitPrice ?? ''}
+                            onChange={(event) =>
+                              updatePreparedPriceFromInput(item.id, 'estimatedUnitPrice', event)
+                            }
+                          />
+                          <span className="row-muted">{formatPrice(item.estimatedUnitPrice)}</span>
+                          <button
+                            className="btn-icon danger"
+                            onClick={() => confirmDeletePreparedItem(item)}
+                            disabled={preparedBulkMode}
+                            aria-label="Удалить"
+                          >
+                            <X size={16} />
+                          </button>
+                        </SortableRow>
+                      )
+                    })}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
+          </section>
 
-              <div className="flex-row">
-                <button className="btn btn-primary flex-1" onClick={startShopping} disabled={activeSession.status !== 'draft' || orderedSessionItems.length === 0}>
-                  Начать покупки
-                </button>
-                <button className="btn btn-outline" onClick={closeActiveSession}>
-                  Отмена
-                </button>
+          <section className="panel">
+            <h2 className="panel-title">Ассортимент (добавление нехватки)</h2>
+            {candidateProducts.length === 0 ? (
+              <div className="empty-state small">
+                <PackageOpen size={32} />
+                <p>Все товары уже добавлены в подготовку.</p>
               </div>
-
-              <h2 className="section-title">Нужно купить</h2>
-              {orderedProducts.filter(p => !isIncludedInActiveSession(p.id) && p.stockStatus !== 'in_stock').length === 0 ? (
-                <p style={{fontSize: '0.9rem', color: 'var(--color-text-secondary)'}}>Все нужные товары уже в списке.</p>
-              ) : (
-                <div className="list-container">
-                  {orderedProducts.filter(p => p.stockStatus !== 'in_stock').map((product) => {
-                    const included = isIncludedInActiveSession(product.id)
-                    return (
-                      <div key={product.id} className="list-item" style={{ flexDirection: 'row', alignItems: 'center', padding: '12px 16px', opacity: included ? 0.6 : 1 }}>
-                        <div className="flex-1">
-                          <div className="item-title">{product.name}</div>
-                          <div className="item-subtitle">{formatCurrencyRsd(product.latestUnitPrice)}</div>
-                        </div>
-                        <button className={`btn ${included ? 'btn-outline' : 'btn-primary'}`} onClick={() => toggleIncludeInSession(product.id)} style={{padding: '8px 12px'}}>
-                          {included ? 'Убрать' : 'Добавить'}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              <h2 className="section-title">План покупок</h2>
-              {zoneItems.length === 0 ? (
-                <p style={{fontSize: '0.9rem', color: 'var(--color-text-secondary)'}}>Добавьте товары из списка выше.</p>
-              ) : (
-                <div className="list-container">
-                  {zoneItems.map((item) => {
-                    const product = productMap.get(item.productId)
-                    if (!product) return null
-                    return (
-                      <div key={item.id} className={`list-item ${item.inZone ? 'zone-in' : 'zone-out'}`}>
-                        <div className="item-header">
-                          <div className="item-title-col">
-                            <div className="item-title">{product.name}</div>
-                            <div className="item-subtitle">Итого: {formatCurrencyRsd(item.estimatedTotal)}</div>
-                          </div>
-                          <div className="item-actions">
-                            <button className="btn-icon" onClick={() => moveShoppingItem(item.id, -1)}><ArrowUp size={20} /></button>
-                            <button className="btn-icon" onClick={() => moveShoppingItem(item.id, 1)}><ArrowDown size={20} /></button>
-                            <button className="btn-icon danger" onClick={() => removeSessionItem(item.id)}><X size={20} /></button>
-                          </div>
-                        </div>
-                        <div className="item-controls-row">
-                          <div className="inline-edit flex-1">
-                            <input className="inline-input" type="number" min={1} value={item.plannedQty} onChange={(e) => updateSessionItemNumericFromInput(item.id, 'plannedQty', e)} />
-                            <span style={{color: 'var(--color-text-secondary)', paddingRight: '8px'}}>{product.unit}</span>
-                          </div>
-                          <div className="inline-edit flex-1">
-                            <input className="inline-input" type="number" min={0} value={item.estimatedUnitPrice} onChange={(e) => updateSessionItemNumericFromInput(item.id, 'estimatedUnitPrice', e)} />
-                            <span style={{color: 'var(--color-text-secondary)', paddingRight: '8px'}}>RSD</span>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </>
-          )}
+            ) : (
+              <div className="list">
+                {candidateProducts.map((product) => (
+                  <div key={product.id} className="line-row">
+                    <span className="row-name static">{product.name}</span>
+                    <span className="row-muted">Номинал: {product.targetQty} {unitLabel(product.unit)}</span>
+                    <span className="row-muted">Цена: {formatPrice(product.latestUnitPrice)}</span>
+                    <button className="btn btn-primary" onClick={() => openShortageDialog(product)}>
+                      Добавить нехватку
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </main>
       )}
 
       {tab === 'store' && (
         <main className="tab-content">
-          {!activeSession || activeSession.status === 'draft' ? (
-            <div className="empty-state">
-              <ShoppingBag size={48} className="empty-icon" />
-              <h3>Режим магазина</h3>
-              <p>Начните сессию на вкладке «Подготовка», чтобы собирать корзину.</p>
+          <section className="panel">
+            <h2 className="panel-title">Бюджет</h2>
+            <div className="budget-row">
+              <label htmlFor="budget-store">Общий бюджет (RSD)</label>
+              <input
+                id="budget-store"
+                className="field field-sm"
+                type="number"
+                min={1}
+                value={state.settings.defaultBudget}
+                onChange={(event) => updateBudget(event.target.value)}
+              />
             </div>
-          ) : (
-            <>
-              <div className="budget-summary">
-                <div className="budget-summary-row">
-                  <span>Потрачено:</span>
-                  <strong style={{color: 'var(--color-bought-text)'}}>{formatCurrencyRsd(inStoreSpent)}</strong>
-                </div>
-                <div className="budget-summary-row">
-                  <span>Осталось от бюджета:</span>
-                  <strong style={{color: inStoreRemaining < 0 ? 'var(--color-danger)' : 'inherit'}}>
-                    {formatCurrencyRsd(inStoreRemaining)}
-                  </strong>
-                </div>
+            <div className="budget-summary-line">
+              <span>Потрачено: {formatCurrencyRsd(inStoreSpent)}</span>
+              <span>Остаток: {formatCurrencyRsd(inStoreRemaining)}</span>
+            </div>
+            {inStoreRemaining < 0 && (
+              <div className="budget-warning danger">
+                <AlertCircle size={16} />
+                <span>Превышен бюджет.</span>
               </div>
+            )}
+          </section>
 
-              {inStoreRemaining < 0 && (
-                <div className="budget-alert" style={{background: 'var(--color-danger)', color: 'white'}}>
-                  <AlertCircle size={20} /> Превышение бюджета!
-                </div>
-              )}
+          <section className="panel">
+            <div className="panel-toolbar">
+              <h2 className="panel-title">Текущий список в магазине</h2>
+              <div className="toolbar-actions">
+                <button
+                  className={`btn ${preparedBulkMode ? 'btn-danger' : 'btn-outline'}`}
+                  onClick={() => {
+                    setPreparedBulkMode((prev) => !prev)
+                    setPreparedSelectedIds(new Set())
+                  }}
+                >
+                  {preparedBulkMode ? 'Отмена' : 'Массовое удаление'}
+                </button>
+                {preparedBulkMode && (
+                  <button
+                    className="btn btn-danger"
+                    disabled={preparedSelectedIds.size === 0}
+                    onClick={confirmBulkDeletePrepared}
+                  >
+                    <Trash2 size={16} /> Удалить ({preparedSelectedIds.size})
+                  </button>
+                )}
+              </div>
+            </div>
 
-              <div className="list-container">
-                {zoneItems.map((item) => {
-                  const product = productMap.get(item.productId)
-                  if (!product) return null
-                  const rounded = roundUpToStep(item.actualUnitPrice, activeSession.roundingStep)
-                  const actualTotal = rounded * item.plannedQty
-                  return (
-                    <div key={item.id} className="list-item" style={{padding: '12px', background: item.picked ? 'var(--color-primary-light)' : 'var(--color-white)'}}>
-                      <div className={`store-item ${item.picked ? 'checked' : ''}`}>
-                        <div className={`check-circle ${item.picked ? 'checked' : ''}`} onClick={() => togglePicked(item.id)}>
-                          <Check size={20} />
-                        </div>
-                        <div className="item-title-col">
-                          <div className="item-title">{product.name}</div>
-                          <div className="item-subtitle">
-                            {item.plannedQty} {product.unit} × {formatCurrencyRsd(rounded)} = {formatCurrencyRsd(actualTotal)}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="item-controls-row" style={{marginTop: '4px'}}>
-                        <div className="inline-edit flex-1">
-                          <span style={{color: 'var(--color-text-secondary)', paddingLeft: '8px'}}>Ввод цены:</span>
-                          <input 
-                            className="inline-input" 
-                            style={{ flex: 1, textAlign: 'right' }}
-                            type="number" 
-                            min={0} 
-                            value={item.actualUnitPrice || ''} 
-                            placeholder="0"
-                            onChange={(e) => {
-                              updateSessionItemNumericFromInput(item.id, 'actualUnitPrice', e);
-                              if (!item.picked && Number(e.target.value) > 0) togglePicked(item.id);
-                            }} 
+            {zoneItems.length === 0 ? (
+              <div className="empty-state small">
+                <ShoppingBag size={32} />
+                <p>Нет подготовленных товаров.</p>
+              </div>
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={onPreparedDragEnd}
+              >
+                <SortableContext
+                  items={zoneItems.map((item) => item.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="list">
+                    {zoneItems.map((item) => {
+                      const product = productMap.get(item.productId)
+                      if (!product) {
+                        return null
+                      }
+
+                      const chosenPrice = item.actualUnitPrice ?? item.estimatedUnitPrice
+                      const rowTotal = chosenPrice === null ? null : chosenPrice * item.qty
+
+                      return (
+                        <SortableRow
+                          key={item.id}
+                          id={item.id}
+                          className={item.inZone ? 'zone-covered' : 'zone-out'}
+                        >
+                          {preparedBulkMode && (
+                            <input
+                              type="checkbox"
+                              checked={preparedSelectedIds.has(item.id)}
+                              onChange={(event) => {
+                                const next = new Set(preparedSelectedIds)
+                                if (event.target.checked) {
+                                  next.add(item.id)
+                                } else {
+                                  next.delete(item.id)
+                                }
+                                setPreparedSelectedIds(next)
+                              }}
+                            />
+                          )}
+                          <button
+                            className={`pick-btn${item.picked ? ' checked' : ''}`}
+                            onClick={() => togglePicked(item.id)}
+                            type="button"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <span className="row-name static">{product.name}</span>
+                          <span className="row-muted">{item.qty} {unitLabel(product.unit)}</span>
+                          <input
+                            className="row-price"
+                            type="number"
+                            min={0}
+                            placeholder="?"
+                            value={item.actualUnitPrice ?? ''}
+                            onChange={(event) =>
+                              updatePreparedPriceFromInput(item.id, 'actualUnitPrice', event)
+                            }
                           />
-                          <span style={{color: 'var(--color-text-secondary)', paddingRight: '8px'}}>RSD</span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-              <button className="btn btn-primary" style={{marginTop: 'auto'}} onClick={completeSession}>
-                Завершить покупку
+                          <span className="row-muted">{rowTotal === null ? '?' : formatCurrencyRsd(rowTotal)}</span>
+                          <button
+                            className="btn-icon danger"
+                            onClick={() => confirmDeletePreparedItem(item)}
+                            disabled={preparedBulkMode}
+                            aria-label="Удалить"
+                          >
+                            <X size={16} />
+                          </button>
+                        </SortableRow>
+                      )
+                    })}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
+
+            <div className="panel-footer">
+              <button
+                className="btn btn-primary"
+                onClick={completePurchases}
+                disabled={preparedItems.length === 0}
+              >
+                Завершить покупки
               </button>
-            </>
-          )}
+            </div>
+          </section>
         </main>
       )}
 
       {tab === 'history' && (
         <main className="tab-content">
-          {state.sessions.filter((s) => s.status === 'completed').length === 0 ? (
-            <div className="empty-state">
-              <History size={48} className="empty-icon" />
-              <h3>История пуста</h3>
-              <p>Здесь будут отображаться ваши завершенные покупки.</p>
-            </div>
-          ) : (
-            <div className="list-container">
-              {state.sessions
-                .filter((s) => s.status === 'completed')
-                .slice()
-                .sort((a, b) => new Date(b.completedAt ?? b.updatedAt).getTime() - new Date(a.completedAt ?? a.updatedAt).getTime())
-                .map((session) => {
-                  const entries = state.history.filter((entry) => entry.sessionId === session.id)
-                  const total = entries.reduce((sum, entry) => sum + entry.total, 0)
+          <section className="panel">
+            <h2 className="panel-title">История покупок</h2>
+            {state.history.length === 0 ? (
+              <div className="empty-state small">
+                <History size={32} />
+                <p>История пока пуста.</p>
+              </div>
+            ) : (
+              <div className="history-list">
+                {state.history.map((session) => {
+                  const total = session.items.reduce((sum, item) => sum + item.total, 0)
                   return (
-                    <div key={session.id} className="card">
-                      <div style={{display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px', marginBottom: '8px'}}>
-                        <strong style={{color: 'var(--color-text-secondary)'}}>
-                          {new Date(session.completedAt ?? session.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    <div key={session.id} className="history-card">
+                      <div className="history-head">
+                        <strong>
+                          {new Date(session.completedAt).toLocaleString('ru-RU')}
                         </strong>
-                        <strong style={{fontSize: '1.1rem'}}>{formatCurrencyRsd(total)}</strong>
+                        <span>{formatCurrencyRsd(total)}</span>
                       </div>
-                      {entries.map((entry) => (
-                        <div key={entry.id} style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '4px'}}>
-                          <span>{entry.productName} ({entry.qty})</span>
-                          <span>{formatCurrencyRsd(entry.total)}</span>
+                      {session.items.map((item) => (
+                        <div key={item.id} className="history-row">
+                          <span>
+                            {item.productName} ({item.qty} {unitLabel(item.unit)})
+                          </span>
+                          <span>{item.total === 0 ? '?' : formatCurrencyRsd(item.total)}</span>
                         </div>
                       ))}
+                      <button
+                        className="btn btn-outline"
+                        onClick={() => restoreFromHistory(session)}
+                      >
+                        <RotateCcw size={14} /> Возобновить
+                      </button>
                     </div>
                   )
-              })}
-            </div>
-          )}
+                })}
+              </div>
+            )}
+          </section>
         </main>
       )}
 
+      {shortageDialog && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <h3>Сколько не хватает?</h3>
+            <p>
+              {shortageDialog.product.name}: по умолчанию {shortageDialog.product.targetQty} {unitLabel(shortageDialog.product.unit)}
+            </p>
+            <input
+              className="field"
+              type="number"
+              min={1}
+              value={shortageDialog.qtyDraft}
+              onChange={(event) =>
+                setShortageDialog((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        qtyDraft: event.target.value,
+                      }
+                    : prev
+                )
+              }
+            />
+            <div className="modal-actions">
+              <button className="btn btn-outline" onClick={() => setShortageDialog(undefined)}>
+                Отмена
+              </button>
+              <button className="btn btn-primary" onClick={addToPreparedWithShortage}>
+                Добавить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {undoAction && (
+        <div className="undo-banner">
+          <span>{undoAction.message}. Доступна отмена 5 секунд.</span>
+          <button className="btn btn-outline" onClick={undoLastDelete}>
+            Отмена удаления
+          </button>
+        </div>
+      )}
+
       <nav className="bottom-nav">
-        <button className={`nav-btn ${tab === 'catalog' ? 'active' : ''}`} onClick={() => setTab('catalog')}>
-          <PackageOpen size={24} />
+        <button
+          className={`nav-btn${tab === 'catalog' ? ' active' : ''}`}
+          onClick={() => setTab('catalog')}
+        >
+          <PackageOpen size={20} />
           <span>Ассортимент</span>
         </button>
-        <button className={`nav-btn ${tab === 'preparation' ? 'active' : ''}`} onClick={() => setTab('preparation')}>
-          <ClipboardList size={24} />
+        <button
+          className={`nav-btn${tab === 'preparation' ? ' active' : ''}`}
+          onClick={() => setTab('preparation')}
+        >
+          <ClipboardList size={20} />
           <span>Подготовка</span>
         </button>
-        <button className={`nav-btn ${tab === 'store' ? 'active' : ''}`} onClick={() => setTab('store')}>
-          <ShoppingCart size={24} />
-          <span>В магазине</span>
+        <button
+          className={`nav-btn${tab === 'store' ? ' active' : ''}`}
+          onClick={() => setTab('store')}
+        >
+          <ShoppingBag size={20} />
+          <span>Магазин</span>
         </button>
-        <button className={`nav-btn ${tab === 'history' ? 'active' : ''}`} onClick={() => setTab('history')}>
-          <History size={24} />
+        <button
+          className={`nav-btn${tab === 'history' ? ' active' : ''}`}
+          onClick={() => setTab('history')}
+        >
+          <History size={20} />
           <span>История</span>
         </button>
       </nav>

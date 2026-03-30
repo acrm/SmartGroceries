@@ -10,11 +10,15 @@ It helps users:
 
 ## Features
 
-- Product catalog with stock status and priority
-- Shopping preparation under a budget constraint
-- In-store mode with picked state and price input
-- Configurable price rounding (10 / 50 / 100)
-- Purchase history and latest price tracking
+- Product catalog with nominal target quantity per item
+- Units with defaults: pieces, liters, grams
+- Unknown price display as `?` when unit price is not set
+- Shopping preparation under a shared editable budget
+- Drag-and-drop reordering by handle icon
+- Safe deletion: confirmation, bulk mode, and 5-second undo
+- In-store mode with picked state and real price input
+- Budget zone highlighting: green in-zone, red out-of-zone
+- Purchase history with full restore back to preparation
 - Local persistence using `localStorage`
 - GitHub Pages deployment workflow
 
@@ -63,10 +67,11 @@ See `docs/ARCHITECTURE.md` for full details.
 ## Core Product Flows
 
 1. Manage product catalog (what should exist at home).
-2. Start shopping session with budget and rounding step.
-3. Prioritize candidates under budget.
+2. Add shortage quantities from assortment into preparation.
+3. Prioritize candidates under budget by list order.
 4. In-store: mark picked, enter prices, monitor remaining budget.
-5. Complete session and store history.
+5. Complete purchase: move list to history, clear active list.
+6. Restore any history record back into preparation.
 
 See `docs/PRODUCT_SPEC.md` and `docs/GAME_LOGIC.md`.
 
