@@ -1,0 +1,51 @@
+.field,
+.row-name,
+.row-unit,
+.row-price,
+.counter-wrap,
+.counter-input,
+.counter-btn {
+  border: 1px solid transparent; /* Reserve space without visual noise */
+  background: transparent;
+  outline: none;
+}
+
+.field:focus,
+.row-name:focus,
+.row-unit:focus,
+.row-price:focus,
+.counter-wrap:focus-within {
+  border-color: var(--color-border);
+  background: var(--color-white);
+}
+
+.line-row {
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  padding: 6px 0;
+}
+
+/* Hide counter buttons completely if not focused to reduce noise, unless hover? No, just keep them subtle. */
+.counter-btn {
+  color: var(--color-text-secondary);
+}
+.counter-wrap:focus-within .counter-btn {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+/* Remove panel styles to flatten the interface */
+.panel {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

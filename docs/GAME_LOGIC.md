@@ -11,16 +11,16 @@
 ## Reordering and Interaction
 
 - Reordering in lists is done by drag-and-drop using a dedicated handle icon.
-- Single deletion always requires user confirmation.
+- Single item deletion is removed in favor of unified bulk deletion, toggled from the list header.
 - Bulk deletion mode is available in Catalog, Preparation, and Store.
-- After any deletion (single or bulk), undo is available for 5 seconds.
+- After any deletion, undo is available for 5 seconds.
 
 ## Preparation Flow
 
 1. User manages assortment with nominal quantity per product.
-2. User adds shortage amount from assortment into preparation list.
-3. Default shortage quantity equals product nominal quantity, but can be reduced.
-4. Prepared items are shown at the top of Preparation.
+2. User freely drops products from Assortment list into Preparation list.
+3. Default shortage quantity equals product nominal quantity upon drop, but can be edited in place.
+4. Preparation tab uses two side-by-side draggable lists ("К покупке" and "Ассортимент").
 
 ## Budget Zone Logic
 
@@ -32,6 +32,7 @@
 
 ## Store Flow
 
+- Store tab uses two side-by-side draggable lists ("К покупке" / Unpicked and "В корзине" / Picked).
 - Store tab always shows current prepared list (no explicit "start session" step).
 - Budget is editable in Store and Preparation; both update the same persisted value.
 - Picked items contribute to spent budget only when actual price is set.
