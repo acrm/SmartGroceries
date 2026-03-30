@@ -1147,7 +1147,6 @@ export default function App() {
                             })
                           }
                         />
-                        <span className="row-muted">{formatPrice(product.latestUnitPrice)}</span>
                         <button
                           className="btn-icon danger"
                           onClick={() => confirmDeleteProduct(product)}
@@ -1298,7 +1297,6 @@ export default function App() {
                               updatePreparedPriceFromInput(item.id, 'estimatedUnitPrice', event)
                             }
                           />
-                          <span className="row-muted">{formatPrice(item.estimatedUnitPrice)}</span>
                           <button
                             className="btn-icon danger"
                             onClick={() => confirmDeletePreparedItem(item)}
@@ -1328,10 +1326,10 @@ export default function App() {
                 {candidateProducts.map((product) => (
                   <div key={product.id} className="line-row">
                     <span className="row-name static">{product.name}</span>
-                    <span className="row-muted">Номинал: {product.targetQty} {unitLabel(product.unit)}</span>
-                    <span className="row-muted">Цена: {formatPrice(product.latestUnitPrice)}</span>
-                    <button className="btn btn-primary" onClick={() => openShortageDialog(product)}>
-                      Добавить нехватку
+                    <span className="row-muted">{product.targetQty} {unitLabel(product.unit)}</span>
+                    <span className="row-muted">{formatPrice(product.latestUnitPrice)}</span>
+                    <button className="btn-icon primary" onClick={() => openShortageDialog(product)} aria-label="Добавить">
+                      <Plus size={20} />
                     </button>
                   </div>
                 ))}

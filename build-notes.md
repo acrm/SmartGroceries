@@ -9,3 +9,4 @@
 - 2026w13-1.4 — Redesign UI for better UX with lucide-react icons
 - 2026w13-1.5 — Clean up temp script
 - 2026w14-0.1 — Implement drag delete undo and budget-zone shopping UX
+- 2026w14-1.1 — Make list items fit exactly one single horizontal line and scale down widths
