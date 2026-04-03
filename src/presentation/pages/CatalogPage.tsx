@@ -3,7 +3,7 @@ import { useStore } from '../../application/store';
 import { DndContext, PointerSensor, closestCenter, DragOverlay, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2, Check, PackageOpen } from 'lucide-react';
+import { GripVertical, Trash2, Check, PackageOpen, RotateCcw } from 'lucide-react';
 import type { Unit } from '../../domain/types';
 
 function parsePositiveInt(val: string, fallback = 1) {
@@ -32,7 +32,7 @@ const SortableRow = ({ id, children, className }: {id: string, children: React.R
 };
 
 export const CatalogPage = () => {
-  const { products, addProduct, updateProduct, deleteProducts, reorderProducts } = useStore();
+  const { products, addProduct, updateProduct, deleteProducts, reorderProducts, deletedBackup, undoDelete } = useStore();
   
   const [catalogBulkMode, setCatalogBulkMode] = useState(false);
   const [catalogSelectedIds, setCatalogSelectedIds] = useState<Set<string>>(new Set());
@@ -98,6 +98,11 @@ export const CatalogPage = () => {
             {catalogBulkMode && (
               <button className="btn-icon danger" disabled={catalogSelectedIds.size === 0} onClick={confirmBulkDeleteProducts}>
                 <Check size={20} />
+              </button>
+            )}
+            {deletedBackup && deletedBackup.products && (
+              <button className="btn-icon" onClick={undoDelete} title="Отменить удаление">
+                <RotateCcw size={20} />
               </button>
             )}
           </div>

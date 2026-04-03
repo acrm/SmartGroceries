@@ -9,11 +9,16 @@ export interface ShoppingStore extends AppState {
   updateProduct: (id: string, updates: Partial<Product>) => void;
   deleteProducts: (ids: string[]) => void;
   setBudget: (val: number) => void;
+  clearHistory: () => void;
   moveItem: (id: string, targetList: 'assortment' | 'prepared' | 'picked' | 'unpicked', overId?: string) => void;
   updatePreparedQty: (id: string, newQty: number) => void;
   updatePreparedPrice: (id: string, price: number | null, isActual: boolean) => void;
   reorderProducts: (activeId: string, overId: string) => void;
   reorderPrepared: (activeId: string, overId: string) => void;
+  deletedBackup: { products: Product[], preparedItems: any[] } | null;
+  undoDelete: () => void;
+  completePurchases: () => void;
+  restoreFromHistory: (historyId: string) => void;
 }
 
 const generateId = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -21,6 +26,7 @@ const generateId = () => Math.random().toString(36).substring(2) + Date.now().to
 export const useStore = create<ShoppingStore>((set) => ({
   ...loadState(),
   activeTab: 'catalog',
+  deletedBackup: null,
 
   setTab: (tab) => set({ activeTab: tab }),
 
@@ -47,14 +53,29 @@ export const useStore = create<ShoppingStore>((set) => ({
     return next;
   }),
 
-  deleteProducts: (ids) => set((state) => {
-    const noProducts = state.products.filter(p => !ids.includes(p.id));
-    const noPrepared = state.preparedItems.filter(p => !ids.includes(p.productId));
-    const next = { ...state, products: noProducts, preparedItems: noPrepared };
+  undoDelete: () => set((state) => {
+    if (!state.deletedBackup) return state;
+    const next = {
+      ...state,
+      products: [...state.products, ...state.deletedBackup.products].sort((a,b) => a.orderIndex - b.orderIndex),
+      preparedItems: [...state.preparedItems, ...state.deletedBackup.preparedItems].sort((a,b) => a.orderIndex - b.orderIndex),
+      deletedBackup: null
+    };
     saveState(next);
     return next;
   }),
 
+  deleteProducts: (ids) => set((state) => {
+    const deletedProds = state.products.filter(p => ids.includes(p.id));
+    const deletedPrep = state.preparedItems.filter(p => ids.includes(p.productId));
+    const noProducts = state.products.filter(p => !ids.includes(p.id));
+    const noPrepared = state.preparedItems.filter(p => !ids.includes(p.productId));
+    const next = { ...state, products: noProducts, preparedItems: noPrepared, deletedBackup: { products: deletedProds, preparedItems: deletedPrep } };
+    saveState(next);
+    return next;
+  }),
+
+  clearHistory: () => set({ history: [] }),
   setBudget: (val) => set((state) => {
     const next = { ...state, settings: { ...state.settings, defaultBudget: val } };
     saveState(next);
@@ -79,7 +100,7 @@ export const useStore = create<ShoppingStore>((set) => ({
           actualUnitPrice: null,
           picked: false
         };
-        
+
         if (overId) {
           const overIdx = pItems.findIndex(i => i.productId === overId);
           if (overIdx > -1) {
@@ -106,11 +127,11 @@ export const useStore = create<ShoppingStore>((set) => ({
     const oldIndex = state.products.findIndex(i => i.id === activeId);
     const newIndex = state.products.findIndex(i => i.id === overId);
     if (oldIndex < 0 || newIndex < 0) return state;
-    
+
     const items = [...state.products];
     const [moved] = items.splice(oldIndex, 1);
     items.splice(newIndex, 0, moved);
-    
+
     const next = { ...state, products: items.map((i, index) => ({ ...i, orderIndex: index })) };
     saveState(next);
     return next;
@@ -120,11 +141,11 @@ export const useStore = create<ShoppingStore>((set) => ({
     const oldIndex = state.preparedItems.findIndex(i => i.productId === activeId);
     const newIndex = state.preparedItems.findIndex(i => i.productId === overId);
     if (oldIndex < 0 || newIndex < 0) return state;
-    
+
     const items = [...state.preparedItems];
     const [moved] = items.splice(oldIndex, 1);
     items.splice(newIndex, 0, moved);
-    
+
     const next = { ...state, preparedItems: items.map((i, index) => ({ ...i, orderIndex: index })) };
     saveState(next);
     return next;
@@ -155,6 +176,83 @@ export const useStore = create<ShoppingStore>((set) => ({
     });
 
     const next = { ...state, preparedItems: newItems, products: newProds };
+    saveState(next);
+    return next;
+  }),
+
+  completePurchases: () => set((state) => {
+    const picked = state.preparedItems.filter(i => i.picked);
+    if (picked.length === 0) return state;
+    
+    let totalSpent = 0;
+    const historyItems: any[] = [];
+    const newProducts = [...state.products];
+    
+    picked.forEach(item => {
+      const prodIdx = newProducts.findIndex(p => p.id === item.productId);
+      if (prodIdx === -1) return;
+      const prod = newProducts[prodIdx];
+      const actual = item.actualUnitPrice ?? 0;
+      const total = actual * item.qty;
+      totalSpent += total;
+      
+      historyItems.push({
+        id: generateId(),
+        productId: item.productId,
+        productName: prod.name,
+        unit: prod.unit,
+        qty: item.qty,
+        estimatedUnitPrice: item.estimatedUnitPrice,
+        actualUnitPrice: item.actualUnitPrice,
+        total
+      });
+      
+      if (item.actualUnitPrice !== null) {
+        const hist = [...prod.priceHistory];
+        if (hist[hist.length - 1] !== item.actualUnitPrice) hist.push(item.actualUnitPrice);
+        newProducts[prodIdx] = { ...prod, priceHistory: hist };
+      }
+    });
+    
+    const session = {
+      id: generateId(),
+      completedAt: new Date().toISOString(),
+      budget: state.settings.defaultBudget,
+      items: historyItems,
+      totalSpent
+    };
+    
+    const next = {
+      ...state,
+      history: [session, ...state.history].map((s) => ({...s, id: s.id || generateId()})) as any,
+      preparedItems: state.preparedItems.filter(i => !i.picked),
+      products: newProducts,
+      activeTab: 'history' as any
+    };
+    saveState(next);
+    return next;
+  }),
+  
+  restoreFromHistory: (historyId) => set((state) => {
+    const session = state.history.find(h => h.id === historyId);
+    if (!session) return state;
+    
+    const pItems = [...state.preparedItems];
+    session.items.forEach(hItem => {
+      const existing = pItems.find(p => p.productId === hItem.productId);
+      if (!existing) {
+        pItems.push({
+          id: generateId(),
+          productId: hItem.productId,
+          qty: hItem.qty,
+          orderIndex: pItems.length,
+          estimatedUnitPrice: hItem.actualUnitPrice ?? hItem.estimatedUnitPrice,
+          actualUnitPrice: null,
+          picked: false
+        });
+      }
+    });
+    const next = { ...state, preparedItems: pItems.map((item, index) => ({ ...item, orderIndex: index })), activeTab: 'preparation' as any };
     saveState(next);
     return next;
   })
