@@ -20,3 +20,4 @@
 - 2026w14-4.6 — Rewrite multi-segment list physics, replace Add/Delete components with unified list schema, fix unit schemas, implement budget formatting and inline price delta logic
 - 2026w14-4.7 — Fix Node.js script failure causing lists to not update, apply unified single-list layout, continuous budget panel, unified delete button and inline prices
 - 2026w14-4.8 — Completed layout and alert cleanup
+- 2026w14-4.9 — Enable PWA offline install mode

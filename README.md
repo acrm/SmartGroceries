@@ -20,6 +20,8 @@ It helps users:
 - Budget zone highlighting: green in-zone, red out-of-zone
 - Purchase history with full restore back to preparation
 - Local persistence using `localStorage`
+- PWA install mode for mobile home screen and desktop browsers
+- Offline-ready app shell via service worker cache
 - GitHub Pages deployment workflow
 
 ## Live Demo
