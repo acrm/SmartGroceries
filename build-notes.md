@@ -12,3 +12,4 @@
 - 2026w14-1.1 — Make list items fit exactly one single horizontal line and scale down widths
 - 2026w14-2.1 — Unify delete into bulk mode only; Implement 2-list Drag and Drop architecture in Prep and Store
 - 2026w14-3.1 — Fix DND drop zones for empty list edges and replace prompt with confirm button state
+- 2026w14-4.1 — Complete DDD App restructure and feature updates

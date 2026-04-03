@@ -1,7 +1,7 @@
 {
   "name": "smartgroceries",
   "private": true,
-  "version": "2026w14-3.1",
+  "version": "2026w14-4.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,7 +21,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "lucide-react": "^1.7.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

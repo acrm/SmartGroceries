@@ -1,193 +1,75 @@
 # Application Architecture
 
-## Domain Model (TypeScript-ready)
+## Clean Architecture & DDD
+
+The project is structured following Clean Architecture principles, ensuring separation of concerns:
+
+- **Domain layer (`src/domain/`)**: Contains core business entities (`types.ts`) and pure business logic (`logic.ts`) independent of any UI or state management framework.
+- **Application layer (`src/application/`)**: Contains use cases and state management (`store.ts` using `zustand`), orchestrating domain logic.
+- **Infrastructure layer (`src/infrastructure/`)**: Contains external concerns like persistence (`storage.ts`), adapting browser `localStorage`.
+- **Presentation layer (`src/presentation/`)**: Contains UI components (`components/`) and screens (`pages/`), relying solely on the Application layer to read/write state.
+
+## Domain Model
 
 ```ts
-export type ID = string
-
-export type StockStatus = 'in_stock' | 'low' | 'out'
-export type SessionStatus = 'draft' | 'in_progress' | 'completed' | 'cancelled'
-export type PriceRoundingStep = 10 | 50 | 100
+export type ID = string;
+export type Unit = 'pieces' | 'bottles' | 'packs';
 
 export interface Product {
-  id: ID
-  name: string
-  unit: string // e.g. "pcs", "kg", "l"
-  category?: string
-  stockStatus: StockStatus
-  priority: number // 1..5
-  targetQty?: number
-  latestUnitPrice?: number
-  createdAt: string
-  updatedAt: string
+  id: ID;
+  name: string;
+  unit: Unit;
+  targetQty: number;
+  orderIndex: number;
+  priceHistory: number[];
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface ShoppingItem {
-  id: ID
-  productId: ID
-  plannedQty: number
-  priorityScore: number
-  estimatedUnitPrice: number
-  estimatedTotal: number // plannedQty * estimatedUnitPrice
-  picked: boolean
-  actualUnitPrice?: number
-  roundedUnitPrice?: number
-  actualTotal?: number // plannedQty * roundedUnitPrice
-  removedReason?: 'over_budget' | 'manual'
+export interface PreparedItem {
+  id: ID;
+  productId: ID;
+  qty: number;
+  orderIndex: number;
+  estimatedUnitPrice: number | null;
+  actualUnitPrice: number | null;
+  picked: boolean;
 }
 
-export interface ShoppingSession {
-  id: ID
-  date: string
-  name?: string
-  budgetTotal: number
-  budgetSpent: number
-  budgetRemaining: number
-  roundingStep: PriceRoundingStep
-  status: SessionStatus
-  itemIds: ID[]
-  createdAt: string
-  updatedAt: string
-  completedAt?: string
+export interface HistoryItem {
+  id: ID;
+  productId: ID;
+  productName: string;
+  unit: Unit;
+  qty: number;
+  estimatedUnitPrice: number | null;
+  actualUnitPrice: number | null;
+  total: number;
 }
 
-export interface PurchaseHistoryEntry {
-  id: ID
-  sessionId: ID
-  productId: ID
-  qty: number
-  unitPrice: number
-  roundedUnitPrice: number
-  total: number
-  purchasedAt: string
+export interface HistorySession {
+  id: ID;
+  completedAt: string;
+  budget: number;
+  items: HistoryItem[];
+}
+
+export interface AppSettings {
+  defaultBudget: number;
 }
 
 export interface AppState {
-  products: Record<ID, Product>
-  sessions: Record<ID, ShoppingSession>
-  items: Record<ID, ShoppingItem>
-  history: Record<ID, PurchaseHistoryEntry>
-  activeSessionId?: ID
-  settings: {
-    currency: string
-    roundingStepDefault: PriceRoundingStep
-  }
+  products: Product[];
+  preparedItems: PreparedItem[];
+  history: HistorySession[];
+  settings: AppSettings;
 }
 ```
 
-## Relationships
+## State Management
 
-- One `ShoppingSession` -> many `ShoppingItem`.
-- One `ShoppingItem` -> one `Product`.
-- One completed `ShoppingItem` can generate one `PurchaseHistoryEntry`.
-- One `Product` -> many `PurchaseHistoryEntry` records.
-
-## Derived/Computed Fields
-
-- `ShoppingSession.budgetSpent = sum(item.actualTotal where picked && !removedReason)`
-- `ShoppingSession.budgetRemaining = budgetTotal - budgetSpent`
-- `Product.latestUnitPrice = latest history entry roundedUnitPrice`
-- `ShoppingItem.estimatedTotal = plannedQty * estimatedUnitPrice`
-- Price delta for product: `latest - previous`
-
-## State Management Strategy
-
-## Global state
-- Products
-- Sessions
-- Shopping items
-- History
-- App settings
-
-Use a centralized reducer + context (or lightweight store), because entities are shared across multiple screens.
-
-## Local state
-- Form inputs
-- Temporary filters/sort options
-- Draft UI interaction state (modals, editing row)
+We use `zustand` (`src/application/store.ts`) for global state. It provides atomic actions (`addProduct`, `moveItem`, `updatePreparedPrice`, etc.) and automatically persists the latest state using `saveState` from the infrastructure layer.
 
 ## Persistence Strategy
 
-Use a storage adapter to isolate browser API:
-
-```ts
-interface StorageAdapter {
-  load(): AppState | null
-  save(state: AppState): void
-  clear(): void
-}
-```
-
-Recommended keys:
-- `sg_state_v1` for normalized app state
-- `sg_migrations` for migration metadata (optional)
-
-Rules:
-- Debounced save on global state changes.
-- Schema versioning inside persisted payload.
-- Safe parse + fallback to defaults.
-
-## Suggested Folder Structure
-
-```text
-src/
-  app/
-    App.tsx
-    router.tsx
-    providers.tsx
-  domain/
-    models.ts
-    selectors.ts
-    reducers.ts
-    services/
-      prioritization.ts
-      budgeting.ts
-      sessionLifecycle.ts
-  persistence/
-    storage.ts
-    migrations.ts
-  features/
-    catalog/
-      CatalogScreen.tsx
-      ProductForm.tsx
-      ProductList.tsx
-    preparation/
-      PreparationScreen.tsx
-      BudgetPanel.tsx
-      SuggestedItemsList.tsx
-    inStore/
-      InStoreScreen.tsx
-      PriceInputRow.tsx
-      RemainingBudget.tsx
-    history/
-      HistoryScreen.tsx
-      SessionHistoryList.tsx
-      ProductPriceTrend.tsx
-  ui/
-    Button.tsx
-    Input.tsx
-    Tabs.tsx
-    Badge.tsx
-  utils/
-    money.ts
-    dates.ts
-    ids.ts
-```
-
-## Component Hierarchy
-
-- `AppShell`
-  - `NavigationTabs`
-  - `CatalogScreen`
-  - `PreparationScreen`
-  - `InStoreScreen`
-  - `HistoryScreen`
-
-Each screen composes feature components and consumes domain selectors/actions; UI components stay dumb/presentational.
-
-## Separation of Concerns
-
-- UI: pure render + user events.
-- Domain: business rules, reducers, selectors, algorithms.
-- Persistence: local storage read/write, migrations.
-- Utils: formatting, rounding helpers, pure helpers.
+`localStorage` under the key `sg_state_v3`. Data migrations from legacy versions are handled during `loadState()` in `src/infrastructure/storage.ts`.

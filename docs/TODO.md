@@ -4,34 +4,33 @@
 
 - [x] Frontend-only React + TypeScript setup
 - [x] Local state persistence baseline
-- [x] GitHub Pages deployment workflow
 - [x] Versioned workflow with build notes
-- [x] Product specification and architecture docs
+- [x] Clean Architecture / Domain Driven Design structure
+- [x] Strict <300 line-per-module separation constraint
+- [x] Update workflow docs and configs
+- [x] Copy bootstrap prompt into docs
 
 ## MVP Delivery Plan
 
-- [x] Create normalized domain store (`products`, `preparedItems`, `history`, `settings`)
-- [x] Implement Product Catalog CRUD with nominal quantity and units
-- [x] Add Shopping Preparation screen with shared editable budget
-- [x] Implement budget-zone prioritization by list order
-- [x] Build In-Store mode with live spent/remaining budget
-- [x] Add checkout flow and purchase history persistence
-- [x] Build History screen with restore back to preparation
-- [x] Add drag-and-drop reorder by handle icon
-- [x] Add delete confirmation + bulk delete + 5-second undo
+- [x] Store migration from context/React to Zustand
+- [x] Unit conversions (liters => bottles, grams => packs)
+- [x] Transform simple price variable to `priceHistory` array
+- [x] DragOverlay support for stable Drag & Drop UI tracking
+- [x] Inline additive inputs instead of separate top panels
+- [x] 2-line Budget Display (with dynamic remaining balance & `noPriceCount`)
+- [x] Shared UI refactoring (`Layout`, `Tabs`)
 
 ## Quality and Workshop Readiness
 
-- [ ] Add reducer-level tests for budget-zone and undo transitions
-- [ ] Add stronger migration guard and versioned schema metadata
+- [ ] Complete `PreparationPage` with DnD lists logic
+- [ ] Complete `StorePage` with active budget counters
+- [ ] Complete `HistoryPage` with state recovery
 - [ ] Add explicit error boundary for corrupted local payloads
 - [ ] Improve keyboard-only reorder accessibility for DnD handles
-- [ ] Add workshop demo script and checkpoints per stage
 
 ## Future Extensions
 
 - [ ] Consumption-rate estimation based on purchase cadence
 - [ ] Category-level budget caps
 - [ ] CSV export/import
-- [ ] Enhanced price trend visualization
 - [ ] Optional PWA offline UX improvements
