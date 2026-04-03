@@ -14,3 +14,4 @@
 - 2026w14-3.1 — Fix DND drop zones for empty list edges and replace prompt with confirm button state
 - 2026w14-4.1 — Complete DDD App restructure and feature updates
 - 2026w14-4.2 — Fix missing Tailwind CSS configuration
+- 2026w14-4.3 — Redesign CatalogPage to match inline inputs and bulk delete single-line requirements
