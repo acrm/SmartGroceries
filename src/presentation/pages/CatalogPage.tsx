@@ -11,6 +11,48 @@ function parsePositiveInt(val: string, fallback = 1) {
   return isNaN(parsed) || parsed < 1 ? fallback : parsed;
 }
 
+
+const InlinePriceEdit = ({ value, onChange, rangeText }: {value: number, onChange: (v: number) => void, rangeText: string}) => {
+   const [editing, setEditing] = useState(false);
+   const [val, setVal] = useState(value.toString());
+   
+   if (editing) {
+      return (
+         <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '4px', padding: '2px' }}>
+            <button className="counter-btn" onClick={() => onChange(Math.max(0, parseInt(val || '0') - 1))}>-</button>   
+            <input 
+               type="number" 
+               autoFocus
+               min={0}
+               value={val}
+               onChange={e => setVal(e.target.value)}
+               onBlur={() => {
+                  setEditing(false);
+                  onChange(parseInt(val || '0'));
+               }}
+               onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+               style={{width: '40px', border: 'none', background: 'transparent', textAlign: 'center', outline: 'none', fontSize: '0.85rem', fontWeight: 'bold', padding: 0}}
+            />
+            <button className="counter-btn" onClick={() => onChange(parseInt(val || '0') + 1)}>+</button>
+         </div>
+      );
+   }
+
+   return (
+      <div 
+         onClick={(e) => {
+            e.stopPropagation();
+            setVal(value.toString());
+            setEditing(true);
+         }} 
+         style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', minWidth: '40px', justifyContent: 'flex-end', fontWeight: 'bold', fontSize: '0.85rem', color: '#475569'}}
+         title="Click to edit price"
+      >
+         {rangeText || '-'}
+      </div>
+   );
+};
+
 const InlineEdit = ({ value, onChange, autoFocus }: {value: string, onChange: (v: string) => void, autoFocus?: boolean}) => {
   const [val, setVal] = useState(value);
   return <input 
@@ -72,25 +114,7 @@ export const CatalogPage = () => {
     return `${min}-${max}`;
   };
 
-  const handlePriceClick = (prod: any) => {
-    const current = prod.priceHistory[prod.priceHistory.length - 1] ?? 0;
-    const res = window.prompt(`Цена:\nТекущая: ${current}\nВведите новую базовую цену или +/-\n(Исторический диапазон: ${formatPriceRange(prod.priceHistory)})`, '');
-    if (!res) return;
-    const trimmed = res.trim();
-    let computed = current;
-    if (trimmed.startsWith('+')) {
-      computed += parseFloat(trimmed.slice(1)) || 0;
-    } else if (trimmed.startsWith('-')) {
-      computed = Math.max(0, computed - (parseFloat(trimmed.slice(1)) || 0));
-    } else {
-      const val = parseFloat(trimmed);
-      if (!isNaN(val) && val >= 0) computed = val;
-    }
-    
-    const hist = [...prod.priceHistory];
-    if (hist[hist.length - 1] !== computed) hist.push(computed);
-    updateProduct(prod.id, { priceHistory: hist });
-  };
+  
 
   return (
     <main className="tab-content">
@@ -141,9 +165,16 @@ export const CatalogPage = () => {
                       <option value="packs">Уп</option>
                     </select>
                     
-                    <div onClick={() => handlePriceClick(product)} style={{ marginLeft: 8, cursor: 'pointer', minWidth: '40px', textAlign: 'right', fontWeight: 'bold', fontSize: '0.85rem', color: '#475569' }}>
-                       {formatPriceRange(product.priceHistory)}
-                    </div>
+                    {(() => {
+     const currentPrice = product.priceHistory[product.priceHistory.length - 1] ?? 0;
+     return (
+        <InlinePriceEdit 
+           value={currentPrice} 
+           rangeText={formatPriceRange(product.priceHistory)}
+           onChange={(newVal) => updateProduct(product.id, { priceHistory: [...product.priceHistory, newVal] })} 
+        />
+     )
+  })()}
                   </SortableRow>
                 ))}
 

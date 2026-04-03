@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+const fs = require('fs');
+
+const content = `import React, { useState } from 'react';
 import { useStore } from '../../application/store';
 import { DndContext, PointerSensor, closestCorners, DragOverlay, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -71,7 +73,7 @@ const SortableRow = ({ id, children, className }: {id: string, children: React.R
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition };   
   return (
-    <div ref={setNodeRef} style={style} className={`line-row sortable-row${isDragging ? ' dragging' : ''}${className ? ' ' + className : ''}`}>
+    <div ref={setNodeRef} style={style} className={\`line-row sortable-row\${isDragging ? ' dragging' : ''}\${className ? ' ' + className : ''}\`}>
       <button type="button" className="drag-handle" ref={setActivatorNodeRef} {...attributes} {...listeners}>
         <GripVertical size={18} />
       </button>
@@ -238,3 +240,5 @@ export const StorePage = () => {
     </main>
   );
 };
+`
+fs.writeFileSync('src/presentation/pages/StorePage.tsx', content);

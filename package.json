@@ -1,7 +1,7 @@
 {
   "name": "smartgroceries",
   "private": true,
-  "version": "2026w14-4.7",
+  "version": "2026w14-4.8",
   "type": "module",
   "scripts": {
     "dev": "vite",

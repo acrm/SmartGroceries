@@ -81,11 +81,6 @@ export const PreparationPage = () => {
     }
   };
 
-  const handleGlobalClear = () => {
-    if(window.confirm('Очистить список к покупке и удалить весь ассортимент?')) {
-      store.deleteProducts(store.products.map(p => p.id));
-    }
-  };
 
   return (
     <main className="tab-content">
@@ -96,7 +91,7 @@ export const PreparationPage = () => {
             <input className="field field-sm" type="number" value={budget} onChange={(e) => setBudget(parseFloat(e.target.value) || 0)} style={{ width: '80px', margin: 0 }} />
             RSD
           </h2>
-          <button className="btn-icon danger" onClick={handleGlobalClear}><Trash2 size={20} /></button>
+          
         </div>
         <div className="budget-row" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <div style={{ fontSize: '0.9rem', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -113,7 +108,10 @@ export const PreparationPage = () => {
         <section className="panel" style={{borderTop: 'none', borderTopLeftRadius: 0, borderTopRightRadius: 0}}>
           <div className="list continuous-list">
             
-            <div className="list-header" style={{fontSize: '0.85rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 'bold', padding: '12px 8px 6px'}}>К покупке</div>
+            <div className="list-header" style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 8px 6px', background: '#fff', borderBottom: '1px solid #f1f5f9'}}>
+       <span style={{fontSize: '0.85rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 'bold'}}>К покупке</span>
+       <button className="btn-icon danger" onClick={() => store.deleteProducts(store.preparedItems.map(i => i.productId))} style={{padding: 0}}><Trash2 size={16} /></button>
+   </div>
             <DroppableList id="prep-list" style={{minHeight: '20px'}}>
               <SortableContext items={setupItems.map(i => i.productId)} strategy={verticalListSortingStrategy}>
                 {itemsWithZone.map(({ productId, qty, prod, inZone }) => prod ? ( 
@@ -129,7 +127,9 @@ export const PreparationPage = () => {
               </SortableContext>
             </DroppableList>
 
-            <div className="list-header" style={{fontSize: '0.85rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 'bold', padding: '16px 8px 6px'}}>Ассортимент</div>
+            <div className="list-header" style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 8px 6px', background: '#fff', borderBottom: '1px solid #f1f5f9', borderTop: '1px solid #f1f5f9'}}>
+       <span style={{fontSize: '0.85rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 'bold'}}>Ассортимент</span>
+   </div>
             <DroppableList id="assortment-list" style={{minHeight: '20px'}}>
               <SortableContext items={assortment.map(p => p.id)} strategy={verticalListSortingStrategy}>
                 {assortment.map(prod => (

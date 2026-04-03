@@ -19,7 +19,7 @@ export const HistoryPage = () => {
     <main className="tab-content">
       <div className="panel-toolbar" style={{ marginBottom: '16px' }}>
          <h2 className="panel-title">История</h2>
-         <button className="btn-icon" onClick={() => { if(window.confirm('Очистить историю?')) store.clearHistory() }}><Trash2 size={20}/></button>
+         <button className="btn-icon" onClick={() => { store.clearHistory() }}><Trash2 size={20}/></button>
       </div>
       
       {store.history.map(trip => {
@@ -28,7 +28,7 @@ export const HistoryPage = () => {
           <section key={trip.id} className="panel" style={{ marginBottom: '16px' }}>
              <div className="panel-toolbar" style={{ marginBottom: '8px' }}>
                 <h3 className="panel-title" style={{ fontSize: '1rem' }}>{date}</h3>
-                <button className="btn-icon" onClick={() => { if(window.confirm('Добавить товары из этой покупки в новый список?')) store.restoreFromHistory(trip.id) }}><RotateCcw size={18}/></button>
+                <button className="btn-icon" onClick={() => { store.restoreFromHistory(trip.id) }}><RotateCcw size={18}/></button>
              </div>
              <div className="list">
                {trip.items.map(item => {
