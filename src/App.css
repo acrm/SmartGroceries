@@ -1,0 +1,575 @@
+.app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--color-white);
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 700;
+  font-size: 1.1rem;
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
+.header-icon {
+  color: var(--color-primary);
+}
+
+.tab-content {
+  flex: 1;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.panel {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panel-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+}
+
+.panel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.7fr 0.5fr 0.7fr auto;
+  gap: 8px;
+}
+
+.field {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.95rem;
+  width: 100%;
+  background: transparent;
+}
+.field:focus {
+  border-color: var(--color-border);
+  background: var(--color-white);
+  outline: none;
+}
+
+.field-sm {
+  min-width: 80px;
+}
+
+.btn {
+  border: none;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
+.btn-outline {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.btn-danger {
+  background: var(--color-danger);
+  color: var(--color-white);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 48px; 
+}
+
+.line-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  padding: 8px 0;
+  min-height: 40px;
+  overflow: hidden;
+}
+
+.sortable-row.dragging {
+  opacity: 0.7;
+  box-shadow: var(--shadow-float);
+}
+
+.drag-handle {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.row-name {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: transparent;
+}
+.row-name:focus {
+  border-color: var(--color-border);
+  background: var(--color-white);
+  outline: none;
+}
+
+.row-name.static {
+  border: none;
+  padding: 0;
+  font-weight: 600;
+}
+
+.counter-wrap {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.counter-wrap:focus-within {
+  border-color: var(--color-border);
+  background: var(--color-white);
+}
+
+.counter-btn {
+  border: none;
+  background: transparent;
+  width: 24px;
+  height: 28px;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.counter-input {
+  width: 32px;
+  height: 28px;
+  border: none;
+  text-align: center;
+  font-size: 0.9rem;
+  padding: 0;
+  background: transparent;
+}
+.counter-input:focus { outline: none; }
+
+.row-unit {
+  min-width: 0;
+  width: 48px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  background: transparent;
+}
+.row-unit:focus {
+  border-color: var(--color-border);
+  background: var(--color-white);
+  outline: none;
+}
+
+.row-unit.fixed {
+  border: none;
+  width: auto;
+  min-width: 24px;
+  text-align: right;
+  font-weight: 600;
+  padding: 0;
+}
+
+.row-price {
+  width: 58px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  background: transparent;
+}
+.row-price:focus {
+  border-color: var(--color-border);
+  background: var(--color-white);
+  outline: none;
+}
+
+.row-muted {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-icon {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn-icon.danger {
+  color: var(--color-danger);
+}
+
+.btn-icon.primary {
+  color: var(--color-primary);
+}
+
+.pick-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: transparent;
+  background: var(--color-white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.pick-btn.checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-white);
+}
+
+.zone-covered {
+  background: #e8f7ef;
+  border-color: #7ec89a;
+}
+
+.zone-out {
+  background: #ffeaea;
+  border-color: #f1a3a3;
+}
+
+.budget-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.budget-summary-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+
+.budget-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #8a4d00;
+  background: #fff4d6;
+  border: 1px solid #f7d38b;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 0.85rem;
+}
+
+.budget-warning.danger {
+  color: #841f1f;
+  background: #ffe5e5;
+  border-color: #efb2b2;
+}
+
+.panel-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-card {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.history-head,
+.history-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.history-row {
+  color: var(--color-text-secondary);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  padding: 22px 12px;
+}
+
+.empty-state.small {
+  padding: 14px 8px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  padding: 12px;
+}
+
+.modal-card {
+  width: min(440px, 100%);
+  background: var(--color-white);
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.undo-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 74px;
+  z-index: 20;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  box-shadow: var(--shadow-float);
+}
+
+.bottom-nav {
+  position: sticky;
+  bottom: 0;
+  background: var(--color-white);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  z-index: 10;
+}
+
+.nav-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.nav-btn.active {
+  color: var(--color-primary);
+}
+
+@media (max-width: 900px) {
+  .form-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.field,
+.row-name,
+.row-unit,
+.row-price,
+.counter-wrap,
+.counter-input,
+.counter-btn {
+  border: 1px solid transparent; /* Reserve space without visual noise */
+  background: transparent;
+  outline: none;
+}
+
+.field:focus,
+.row-name:focus,
+.row-unit:focus,
+.row-price:focus,
+.counter-wrap:focus-within {
+  border-color: var(--color-border);
+  background: var(--color-white);
+}
+
+.line-row {
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  padding: 6px 0;
+}
+
+/* Hide counter buttons completely if not focused to reduce noise, unless hover? No, just keep them subtle. */
+.counter-btn {
+  color: var(--color-text-secondary);
+}
+.counter-wrap:focus-within .counter-btn {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+/* Remove panel styles to flatten the interface */
+.panel {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.field,
+.row-name,
+.row-unit,
+.row-price,
+.counter-wrap,
+.counter-input,
+.counter-btn {
+  border: 1px solid transparent; /* Reserve space without visual noise */
+  background: transparent;
+  outline: none;
+}
+
+.field:focus,
+.row-name:focus,
+.row-unit:focus,
+.row-price:focus,
+.counter-wrap:focus-within {
+  border-color: var(--color-border);
+  background: var(--color-white);
+}
+
+.line-row {
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  padding: 6px 0;
+}
+
+/* Hide counter buttons completely if not focused to reduce noise, unless hover? No, just keep them subtle. */
+.counter-btn {
+  color: var(--color-text-secondary);
+}
+.counter-wrap:focus-within .counter-btn {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+/* Remove panel styles to flatten the interface */
+.panel {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

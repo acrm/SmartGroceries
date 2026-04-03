@@ -5,7 +5,7 @@ import { loadState, saveState } from '../infrastructure/storage';
 export interface ShoppingStore extends AppState {
   setTab: (tab: 'catalog' | 'preparation' | 'store' | 'history') => void;
   activeTab: 'catalog' | 'preparation' | 'store' | 'history';
-  addProduct: () => void;
+  addProduct: (product?: Partial<Product>) => void;
   updateProduct: (id: string, updates: Partial<Product>) => void;
   deleteProducts: (ids: string[]) => void;
   setBudget: (val: number) => void;
@@ -24,14 +24,14 @@ export const useStore = create<ShoppingStore>((set) => ({
 
   setTab: (tab) => set({ activeTab: tab }),
 
-  addProduct: () => set((state) => {
+  addProduct: (p) => set((state) => {
     const newProduct: Product = {
       id: generateId(),
-      name: '',
-      unit: 'pieces',
-      targetQty: 1,
+      name: p?.name || '',
+      unit: p?.unit || 'pieces',
+      targetQty: p?.targetQty || 1,
       orderIndex: state.products.length,
-      priceHistory: [],
+      priceHistory: p?.priceHistory || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

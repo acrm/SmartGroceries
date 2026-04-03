@@ -15,3 +15,4 @@
 - 2026w14-4.1 — Complete DDD App restructure and feature updates
 - 2026w14-4.2 — Fix missing Tailwind CSS configuration
 - 2026w14-4.3 — Redesign CatalogPage to match inline inputs and bulk delete single-line requirements
+- 2026w14-4.4 — Restore legacy App.css visual styling and adapt DDD components to it
