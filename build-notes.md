@@ -18,3 +18,4 @@
 - 2026w14-4.4 — Restore legacy App.css visual styling and adapt DDD components to it
 - 2026w14-4.5 — Fix store implementation payload and Vite caching errors for complete logic restoration
 - 2026w14-4.6 — Rewrite multi-segment list physics, replace Add/Delete components with unified list schema, fix unit schemas, implement budget formatting and inline price delta logic
+- 2026w14-4.7 — Fix Node.js script failure causing lists to not update, apply unified single-list layout, continuous budget panel, unified delete button and inline prices
